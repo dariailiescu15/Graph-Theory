@@ -2,11 +2,57 @@ import streamlit as st
 import numpy as np
 import pandas as pd
 import graphviz
+import random
 
 # ==============================================================================
 # CONFIGURARE PAGINĂ ȘI STILURI CSS
 # ==============================================================================
 st.set_page_config(page_title="Algoritmul Ford", layout="wide", page_icon="🗺️")
+
+# ==============================================================================
+# EFECT VIZUAL: PLOAIE DE PORTOCALE 🍊
+# ==============================================================================
+def ploaie_de_portocale():
+    css_portocale = """
+    <style>
+    .oranges-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        pointer-events: none; /* Permite utilizatorilor să dea click prin animație */
+        z-index: 99999;
+        overflow: hidden;
+    }
+    .orange-drop {
+        position: absolute;
+        top: -10vh;
+        user-select: none;
+        animation-name: fall-orange;
+        animation-timing-function: linear;
+        animation-iteration-count: infinite;
+    }
+    @keyframes fall-orange {
+        0% { transform: translateY(0vh) rotate(0deg); opacity: 1; }
+        100% { transform: translateY(120vh) rotate(360deg); opacity: 0.8; }
+    }
+    </style>
+    """
+    html_portocale = "<div class='oranges-container'>"
+    # Generăm 40 de portocale cu poziții, mărimi, durate și întârzieri aleatorii
+    for _ in range(40):
+        left = random.randint(0, 100)
+        durata = random.uniform(4, 10)
+        intarziere = random.uniform(0, 7)
+        dimensiune = random.uniform(1.2, 3.0)
+        html_portocale += f"<div class='orange-drop' style='left: {left}%; animation-duration: {durata}s; animation-delay: {intarziere}s; font-size: {dimensiune}em;'>🍊</div>"
+    html_portocale += "</div>"
+    
+    st.markdown(css_portocale + html_portocale, unsafe_allow_html=True)
+
+# Activăm ploaia de portocale
+ploaie_de_portocale()
 
 st.markdown("""
     <style>
