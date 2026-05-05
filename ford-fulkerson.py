@@ -37,23 +37,21 @@ def get_random_color():
 
 def genereaza_eticheta_arc(cap, istoric_flux, is_initial=False):
     """
-    Construiește eticheta muchiei:
+    Construiește eticheta muchiei respectând riguros enunțul și iterațiile:
     - Graful inițial: doar capacitatea (ex: "10")
-    - Iterații nesaturate: capacitate = f1 + f2 + ... + (ex: "10 = 4 +")
-    - Iterații saturate: capacitate = f1 + f2 + ... . // (ex: "10 = 4 + 6 .\n//")
+    - Arc nesaturat: capacitate = f1 + f2 + ... +
+    - Arc saturat: capacitate = f1 + f2 + ... . \n //
     """
-    # Dacă suntem pe graful inițial, returnăm strict valoarea capacității
+    # Dacă suntem pe graful inițial, afișăm strict capacitatea, nimic altceva.
     if is_initial:
         return f"{fmt(cap)}"
         
-    # Dacă suntem în timpul iterațiilor, dar arcul e neatins
-    if not istoric_flux:
+    if not istoric_flux or sum(istoric_flux) == 0:
         return f"{fmt(cap)} +"
     
     flux_curent = sum(istoric_flux)
     str_flux = ""
     
-    # Construim șirul operațiilor pentru flux
     for idx, val in enumerate(istoric_flux):
         if val == 0: continue
         if val > 0 and len(str_flux) > 0:
@@ -63,10 +61,6 @@ def genereaza_eticheta_arc(cap, istoric_flux, is_initial=False):
         else:
             str_flux += f" - {fmt(abs(val))}"
             
-    if str_flux == "":
-        str_flux = "0"
-            
-    # Adăugăm terminatiile specifice: . și // pentru saturat, + pentru nesaturat
     if flux_curent >= cap:
         return f"{fmt(cap)} = {str_flux} . \n //"
     else:
@@ -112,11 +106,9 @@ def deseneaza_graf_retea(arce_df, istoric_fluxuri, etichete_noduri=None, lant_cu
         i = int(rand['Start (x_i)'])
         j = int(rand['Destinație (x_j)'])
         c_ij = rand['Capacitate c(u)']
-        f_ij = rand['Flux f(u)']
+        f_ij = rand['Flux f(u)'] if 'Flux f(u)' in rand else 0
         
         flux_history = istoric_fluxuri.get((i, j),[])
-        
-        # Generăm textul de pe arc folosind funcția corectată
         label_arc = genereaza_eticheta_arc(c_ij, flux_history, is_initial)
         
         if muchii_taietura and (i, j) in muchii_taietura:
@@ -134,28 +126,91 @@ def deseneaza_graf_retea(arce_df, istoric_fluxuri, etichete_noduri=None, lant_cu
 # ALGORITMUL MATEMATIC FORD-FULKERSON
 # ==============================================================================
 def executa_ford_fulkerson(df_arce, sursa, dest):
-    """Implementarea procedurii de etichetare și determinare iterativă a fluxului."""
+    """Implementarea procedurii analitice (I_0 "din ochi" urmat de PE)."""
     df = df_arce.copy()
+    df['Flux f(u)'] = 0
     istoric =[]
-    iteratie = 0    # Index pentru Iterație și Flux (I_0, \varphi_0)
-    mu_idx = 1      # Index continuu pentru Lanț (\mu_1, \mu_2...)
-    phi_total = 0
     
     istoric_fluxuri = {(int(r['Start (x_i)']), int(r['Destinație (x_j)'])):[] for _, r in df.iterrows()}
-    df['Flux f(u)'] = 0
     
-    while True:
-        culoare_iter = get_random_color() 
-        etichete = {sursa: ("[+]", culoare_iter)}
-        parinti = {sursa: (None, None)} 
-        
+    mu_idx = 1
+    phi_total = 0
+    
+    # --------------------------------------------------------------------------
+    # FAZA I_0: Fluxul inițial determinat "din ochi" (3 lanțuri: margine, mijloc, margine)
+    # --------------------------------------------------------------------------
+    paths_I0 =[]
+    for _ in range(3):
+        # BFS strict direct pentru a găsi rutele cele mai scurte natural
         coada = [sursa]
+        parinti = {sursa: (None, None)}
+        vizitat = {sursa}
         dest_gasita = False
         
         while coada and not dest_gasita:
             nod_curent = coada.pop(0)
             
-            arce_directe = df[df['Start (x_i)'] == nod_curent]
+            arce_directe = df[df['Start (x_i)'] == nod_curent].sort_values(by='Destinație (x_j)')
+            for _, rand in arce_directe.iterrows():
+                vecin = rand['Destinație (x_j)']
+                flux, cap = rand['Flux f(u)'], rand['Capacitate c(u)']
+                if vecin not in vizitat and flux < cap:
+                    vizitat.add(vecin)
+                    parinti[vecin] = (nod_curent, '+')
+                    coada.append(vecin)
+                    if vecin == dest: dest_gasita = True; break
+                        
+        if dest_gasita:
+            lant =[]
+            curent = dest
+            while curent != sursa:
+                parinte, sens = parinti[curent]
+                lant.append((parinte, curent, '+'))
+                curent = parinte
+            lant.reverse()
+            
+            valori_min =[df[(df['Start (x_i)'] == u) & (df['Destinație (x_j)'] == v)].iloc[0]['Capacitate c(u)'] - df[(df['Start (x_i)'] == u) & (df['Destinație (x_j)'] == v)].iloc[0]['Flux f(u)'] for u, v, _ in lant]
+            min_mu = min(valori_min)
+            
+            for u, v, _ in lant:
+                idx = df.index[(df['Start (x_i)'] == u) & (df['Destinație (x_j)'] == v)].tolist()[0]
+                df.at[idx, 'Flux f(u)'] += min_mu
+                istoric_fluxuri[(int(u), int(v))].append(min_mu)
+                
+            phi_total += min_mu
+            paths_I0.append({
+                'mu_idx': mu_idx,
+                'lant': lant,
+                'min_mu': min_mu
+            })
+            mu_idx += 1
+        else:
+            break
+
+    istoric.append({
+        'iteratie': 0,
+        'status': 'I0',
+        'paths': paths_I0,
+        'phi_curent': phi_total,
+        'df_stare': df.copy(),
+        'istoric_fluxuri': {k: list(v) for k, v in istoric_fluxuri.items()}
+    })
+    
+    # --------------------------------------------------------------------------
+    # FAZA I_1, I_2 ... : Procedura de Etichetare curentă (PE)
+    # --------------------------------------------------------------------------
+    iteratie = 1
+    while True:
+        culoare_iter = get_random_color() 
+        etichete = {sursa: ("[+]", culoare_iter)}
+        parinti = {sursa: (None, None)} 
+        coada =[sursa]
+        dest_gasita = False
+        
+        while coada and not dest_gasita:
+            nod_curent = coada.pop(0)
+            
+            arce_directe = df[df['Start (x_i)'] == nod_curent].sort_values(by='Destinație (x_j)')
             for _, rand in arce_directe.iterrows():
                 vecin = rand['Destinație (x_j)']
                 flux, cap = rand['Flux f(u)'], rand['Capacitate c(u)']
@@ -167,7 +222,7 @@ def executa_ford_fulkerson(df_arce, sursa, dest):
                         
             if dest_gasita: break
             
-            arce_inverse = df[df['Destinație (x_j)'] == nod_curent]
+            arce_inverse = df[df['Destinație (x_j)'] == nod_curent].sort_values(by='Start (x_i)')
             for _, rand in arce_inverse.iterrows():
                 vecin = rand['Start (x_i)']
                 flux = rand['Flux f(u)']
@@ -190,8 +245,7 @@ def executa_ford_fulkerson(df_arce, sursa, dest):
         curent = dest
         while curent != sursa:
             parinte, sens = parinti[curent]
-            if sens == '+': lant.append((parinte, curent, '+'))
-            else: lant.append((curent, parinte, '-'))
+            lant.append((parinte, curent, sens))
             curent = parinte
         lant.reverse()
         
@@ -267,12 +321,12 @@ st.markdown('''
 col_tabel, col_graf = st.columns([1, 1.2])
 with col_tabel:
     st.markdown("#### 1. Arhitectura Rețelei de Transport")
-    st.write("Datele inițiale reprezintă capacitățile rețelei. **Algoritmul va inițializa automat fluxul de la $0$** și va efectua toate iterațiile necesare folosind Procedura de Etichetare (PE).")
+    st.write("Configurați setul de arce și **doar** capacitatea acestora. Fluxul pleacă automat de la 0 și va fi generat analitic de algoritm.")
     
     if "tabel_retea" not in st.session_state:
-        date_initiale = [[1,2, 20, 0],[1,3, 30, 0],[1,4, 40, 0],[2,5, 20, 0],[2,7, 10, 0],[3,5, 17, 0],[3,8, 24, 0],[4,6, 18, 0],[4,9, 23, 0],[5,7, 10, 0],[5,8, 9, 0],[6,8, 12, 0],[6,9, 8, 0],[7,10, 31, 0],[8,10, 23, 0],[9,10, 42, 0]
-        ]
-        st.session_state.tabel_retea = pd.DataFrame(date_initiale, columns=["Start (x_i)", "Destinație (x_j)", "Capacitate c(u)", "Flux f(u)"])
+        # Nu mai există coloana 'Flux f(u)'
+        date_initiale = [[1,2, 20],[1,3, 30],[1,4, 40],[2,5, 20],[2,7, 10],[3,5, 17],[3,8, 4],[4,6, 18],[4,9, 23],[5,7, 10],[5,8, 9],[6,8, 12],[6,9, 8],[7,10, 31],[8,10, 19],[9,10, 42]]
+        st.session_state.tabel_retea = pd.DataFrame(date_initiale, columns=["Start (x_i)", "Destinație (x_j)", "Capacitate c(u)"])
 
     edited_df = st.data_editor(st.session_state.tabel_retea, num_rows="dynamic", use_container_width=True)
     noduri_disp = sorted(list(set(edited_df['Start (x_i)']).union(set(edited_df['Destinație (x_j)']))))
@@ -285,7 +339,7 @@ with col_graf:
     st.markdown("#### Starea Inițială a Rețelei")
     istoric_initial = { (int(r['Start (x_i)']), int(r['Destinație (x_j)'])):[] for _, r in edited_df.iterrows() }
     
-    # Parametrul is_initial=True va asigura printarea STRICT a valorii capacității
+    # Parametrul is_initial=True forțează afișarea STRICT a capacității (fără '+', '.')
     st.graphviz_chart(deseneaza_graf_retea(edited_df, istoric_initial, is_initial=True), use_container_width=True)
 
 if st.button("Execută Algoritmul Ford-Fulkerson", type="primary", use_container_width=True):
@@ -295,12 +349,28 @@ if st.button("Execută Algoritmul Ford-Fulkerson", type="primary", use_container
     st.markdown("### Etapele Analitice ale Algoritmului")
     
     for pas in istoric:
-        with st.expander(f"Iterația {pas['iteratie']} - Procedura de Etichetare (PE)", expanded=(pas['status']=='STOP')):
-            
-            str_etichete = ", ".join([f"x_{{{int(n)}}}: \text{{{lbl[0]}}}" for n, lbl in pas['etichete'].items()])
-            st.latex(r"\{ " + str_etichete + r" \}")
-            
-            if pas['status'] == 'CONTINUA':
+        
+        # Cazul special I_0 (Fluxul inițial din ochi)
+        if pas['status'] == 'I0':
+            with st.expander("Iterația $\mathcal{I}_0$ - Determinarea fluxului inițial $\\varphi_0$", expanded=True):
+                st.write("S-au determinat vizual rutele directe (margine, mijloc, margine) pentru formarea fluxului inițial:")
+                for p in pas['paths']:
+                    lant_str = f"x_{{{int(n_start)}}}"
+                    for u, v, sens in p['lant']:
+                        lant_str += r" \xrightarrow{+} x_{" + str(int(v)) + "}"
+                    st.latex(r"\mu_{" + str(p['mu_idx']) + r"} = [" + lant_str + r"] \implies \min(\mu_{" + str(p['mu_idx']) + r"}) = " + fmt(p['min_mu']))
+                
+                sum_min = " + ".join([fmt(p['min_mu']) for p in pas['paths']])
+                st.latex(r"\varphi_0 = " + sum_min + " = " + fmt(pas['phi_curent']))
+                
+                st.graphviz_chart(deseneaza_graf_retea(pas['df_stare'], pas['istoric_fluxuri']), use_container_width=True)
+
+        # Cazul Iterațiilor cu PE (I_1, I_2...)
+        elif pas['status'] == 'CONTINUA':
+            with st.expander(f"Iterația $\mathcal{{I}}_{{{pas['iteratie']}}}$ - Procedura de Etichetare (PE)", expanded=True):
+                str_etichete = ", ".join([f"x_{{{int(n)}}}: \text{{{lbl[0]}}}" for n, lbl in pas['etichete'].items()])
+                st.latex(r"\{ " + str_etichete + r" \}")
+                
                 iter_idx = pas['iteratie']
                 mu_index = pas['mu_idx']
                 
@@ -308,20 +378,21 @@ if st.button("Execută Algoritmul Ford-Fulkerson", type="primary", use_container
                 for u, v, sens in pas['lant']:
                     lant_str += r" \xrightarrow{" + ('+' if sens == '+' else '-') + r"} x_{" + str(int(v)) + "}"
                 
-                st.latex(r"\mu_{" + str(mu_index) + r"} =[" + lant_str + r"]")
+                st.latex(r"\mu_{" + str(mu_index) + r"} = [" + lant_str + r"]")
                 
                 str_min_formule = ", ".join(pas['formule_min_mu'])
                 st.latex(r"\min(\mu_{" + str(mu_index) + r"}) = \min \{" + str_min_formule + r"\} = " + fmt(pas['min_mu']))
                 
-                # Fluxul ia indexul iterației, lanțul ia indexul continuu
-                if iter_idx == 0:
-                    st.latex(r"\varphi_0 = \min(\mu_{" + str(mu_index) + r"}) = " + fmt(pas['phi_curent']))
-                else:
-                    st.latex(r"\varphi_{" + str(iter_idx) + r"} = \varphi_{" + str(iter_idx-1) + r"} + \min(\mu_{" + str(mu_index) + r"}) = " + fmt(pas['phi_prec']) + " + " + fmt(pas['min_mu']) + " = " + fmt(pas['phi_curent']))
+                st.latex(r"\varphi_{" + str(iter_idx) + r"} = \varphi_{" + str(iter_idx-1) + r"} + \min(\mu_{" + str(mu_index) + r"}) = " + fmt(pas['phi_prec']) + " + " + fmt(pas['min_mu']) + " = " + fmt(pas['phi_curent']))
                 
                 st.graphviz_chart(deseneaza_graf_retea(pas['df_stare'], pas['istoric_fluxuri'], etichete_noduri=pas['etichete'], lant_curent=pas['lant']), use_container_width=True)
-            else:
-                st.info(f"**Testul de Optimalitate $TO(I_{{STOP}})$**: Procedura de etichetare nu a putut atinge destinația $x_{{{int(n_dest)}}}$. Procesul converge.")
+                
+        # Cazul de STOP
+        else:
+            with st.expander(f"Iterația $\mathcal{{I}}_{{STOP}}$", expanded=True):
+                str_etichete = ", ".join([f"x_{{{int(n)}}}: \text{{{lbl[0]}}}" for n, lbl in pas['etichete'].items()])
+                st.latex(r"\{ " + str_etichete + r" \}")
+                st.info(f"**Testul de Optimalitate $TO(\mathcal{{I}}_{{STOP}})$**: Procedura de etichetare nu a putut atinge destinația $x_{{{int(n_dest)}}}$. Procesul converge.")
 
     # ==========================================================================
     # VALIDAREA TEOREMI FORD-FULKERSON ȘI EVIDENȚIEREA TĂIETURII
@@ -333,7 +404,7 @@ if st.button("Execută Algoritmul Ford-Fulkerson", type="primary", use_container
     noduri_T =[n for n in noduri_disp if n not in noduri_A] 
     str_T = ", ".join([f"x_{{{int(n)}}}" for n in noduri_T])
     
-    st.write("Conform definiției, determinăm tăietura $T$ ca mulțimea vârfurilor de graf care nu au putut fi etichetate la $I_{STOP}$:")
+    st.write("Conform definiției, determinăm tăietura $T$ ca mulțimea vârfurilor de graf care nu au putut fi etichetate la $\mathcal{I}_{STOP}$:")
     st.latex(r"T = \{ " + str_T + r" \} \implies \begin{cases} x_s \notin T \\ x_t \in T \end{cases}")
     
     cap_taietura = 0
