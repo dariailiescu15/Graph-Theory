@@ -1,23 +1,18 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import graphviz
 import random
-from scipy.optimize import linear_sum_assignment
 
 # ==============================================================================
 # CONFIGURARE PAGINĂ ȘI STILURI CSS
 # ==============================================================================
-st.set_page_config(page_title="Proiect Teoria Grafurilor", layout="wide", page_icon="🎓")
+st.set_page_config(page_title="Algoritmul Ford-Fulkerson", layout="wide", page_icon="🌊")
 
 st.markdown("""
     <style>
     .title-box { background-color: #ffecd9; border-radius: 10px; padding: 25px; text-align: center; margin-bottom: 20px; box-shadow: 0px 4px 10px rgba(0, 0, 0, 0.1); }
     .title-text { color: #e65c00; font-size: 45px; font-weight: 900; margin: 0; font-family: 'Segoe UI', sans-serif; }
     .subtitle-text { color: #cc5200; font-size: 22px; margin: 0; font-style: italic;}
-    .info-box { background-color: #fff4ea; border-left: 5px solid #e65c00; padding: 15px; margin-bottom: 20px; border-radius: 5px;}
-    .matrix-table { border-collapse: collapse; text-align: center; font-size: 18px; margin-bottom: 20px; }
-    .matrix-table td { border: 1px solid #cc5200; padding: 10px; width: 40px; height: 40px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -26,14 +21,38 @@ def fmt(val):
     return str(int(val)) if float(val).is_integer() else f"{val:.2f}"
 
 def get_random_color():
-    """Returnează o culoare hex random dintr-o paletă vibrantă și vizibilă pentru etichete."""
     culori =['#d62728', '#2ca02c', '#1f77b4', '#9400D3', '#FF8C00', '#008B8B', '#FF1493', '#8A2BE2']
     return random.choice(culori)
 
+def genereaza_eticheta_arc(cap, istoric_flux):
+    """
+    Generează eticheta exact cum se cere în curs:
+    - saturat: "Capacitate = f1 + f2 + ... ." și adaugă "//"
+    - nesaturat: "Capacitate = f1 + f2 + ... +"
+    """
+    if not istoric_flux or sum(istoric_flux) == 0:
+        return f"{fmt(cap)} +"
+    
+    flux_curent = sum(istoric_flux)
+    str_flux = ""
+    for idx, val in enumerate(istoric_flux):
+        if val == 0: continue
+        if val > 0 and idx > 0:
+            str_flux += f" + {fmt(val)}"
+        elif val > 0 and idx == 0:
+            str_flux += f"{fmt(val)}"
+        else:
+            str_flux += f" - {fmt(abs(val))}"
+            
+    if flux_curent >= cap:
+        return f"{fmt(cap)} = {str_flux} . \n //" # Punctul și cele 2 liniuțe
+    else:
+        return f"{fmt(cap)} = {str_flux} +"
+
 # ==============================================================================
-# TAB 1: FORD-FULKERSON
+# REPREZENTAREA GRAFICĂ
 # ==============================================================================
-def deseneaza_graf_retea(arce_df, etichete_noduri=None, lant_curent=None):
+def deseneaza_graf_retea(arce_df, istoric_fluxuri, etichete_noduri=None, lant_curent=None):
     graf = graphviz.Digraph()
     graf.attr(rankdir='LR', bgcolor='transparent')
     
@@ -42,7 +61,7 @@ def deseneaza_graf_retea(arce_df, etichete_noduri=None, lant_curent=None):
     noduri = set(arce_df['Start (x_i)']).union(set(arce_df['Destinație (x_j)']))
     str_noduri = {str(int(n)) for n in noduri}
     
-    # FORȚĂM AȘEZAREA GRAFULUI CA ÎN CURS (Dacă rețeaua are fix nodurile 1-10 din curs)
+    # Așezare forțată ca în curs
     if str_noduri.issuperset({'1','2','3','4','5','6','7','8','9','10'}):
         graf.body.append('{rank=same; "1"}')
         graf.body.append('{rank=same; "2"; "3"; "4"}')
@@ -56,7 +75,6 @@ def deseneaza_graf_retea(arce_df, etichete_noduri=None, lant_curent=None):
         
         if etichete_noduri and n in etichete_noduri:
             eticheta_text, culoare_eticheta = etichete_noduri[n]
-            # Desenăm eticheta deasupra nodului cu culoarea aferentă (HTML-like)
             label = f"<<TABLE BORDER='0' CELLBORDER='0' CELLSPACING='0'><TR><TD><FONT POINT-SIZE='12' COLOR='{culoare_eticheta}'><B>{eticheta_text}</B></FONT></TD></TR><TR><TD>x{int(n)}</TD></TR></TABLE>>"
             color_fill = '#ffe0c2'
             
@@ -70,38 +88,54 @@ def deseneaza_graf_retea(arce_df, etichete_noduri=None, lant_curent=None):
     for _, rand in arce_df.iterrows():
         i = str(int(rand['Start (x_i)']))
         j = str(int(rand['Destinație (x_j)']))
-        c_ij = fmt(rand['Capacitate c(u)'])
-        f_ij = fmt(rand['Flux f(u)'])
+        c_ij = rand['Capacitate c(u)']
+        f_ij = rand['Flux f(u)']
         
-        label_arc = f"{f_ij} / {c_ij}"
+        flux_history = istoric_fluxuri.get((int(i), int(j)),[])
+        label_arc = genereaza_eticheta_arc(c_ij, flux_history)
         
+        # Stilizarea muchiilor
         if (i, j) in muchii_lant or (j, i) in muchii_lant:
-            graf.edge(i, j, label=label_arc, color='#cc5200', penwidth='3.5', fontcolor='#cc5200', fontsize='14', fontname='Helvetica-bold')
-        elif float(rand['Flux f(u)']) == float(rand['Capacitate c(u)']):
-            graf.edge(i, j, label=label_arc, color='#a0a0a0', penwidth='1.5', fontcolor='#606060')
+            graf.edge(i, j, label=label_arc, color='#1f77b4', penwidth='3.5', fontcolor='#1f77b4', fontsize='12', fontname='Helvetica-bold')
+        elif f_ij >= c_ij:
+            # ARC SATURAT -> ROȘU și mai gros
+            graf.edge(i, j, label=label_arc, color='#d62728', penwidth='2.5', fontcolor='#d62728', fontsize='12', fontname='Helvetica-bold')
         else:
-            graf.edge(i, j, label=label_arc, color='#ffb380', penwidth='1.5', fontcolor='#888888')
+            # ARC NESATURAT -> Gri normal
+            graf.edge(i, j, label=label_arc, color='#a0a0a0', penwidth='1.5', fontcolor='#555555', fontsize='11')
             
     return graf
 
+# ==============================================================================
+# ALGORITMUL FORD-FULKERSON
+# ==============================================================================
 def ford_fulkerson(df_arce, sursa, dest):
     df = df_arce.copy()
     istoric =[]
     iteratie = 1
     
+    # Inițializăm dicționarul care ține minte cum s-au adunat fluxurile (pentru afișarea cu + și .)
+    istoric_fluxuri = {}
+    for _, rand in df.iterrows():
+        i, j = int(rand['Start (x_i)']), int(rand['Destinație (x_j)'])
+        f = rand['Flux f(u)']
+        if f > 0:
+            istoric_fluxuri[(i, j)] = [f]
+        else:
+            istoric_fluxuri[(i, j)] =[]
+    
     while True:
-        # Păstrăm o culoare specifică pentru toate marcajele din această iterație
         culoare_iter = get_random_color() 
-        
         etichete = {sursa: ("[+]", culoare_iter)}
         parinti = {sursa: (None, None)} 
         
-        coada =[sursa]
+        coada = [sursa]
         dest_gasita = False
         
         while coada and not dest_gasita:
             nod_curent = coada.pop(0)
             
+            # Arce directe
             arce_directe = df[df['Start (x_i)'] == nod_curent]
             for _, rand in arce_directe.iterrows():
                 vecin = rand['Destinație (x_j)']
@@ -114,6 +148,7 @@ def ford_fulkerson(df_arce, sursa, dest):
                         
             if dest_gasita: break
             
+            # Arce inverse
             arce_inverse = df[df['Destinație (x_j)'] == nod_curent]
             for _, rand in arce_inverse.iterrows():
                 vecin = rand['Start (x_i)']
@@ -124,10 +159,12 @@ def ford_fulkerson(df_arce, sursa, dest):
                     coada.append(vecin)
                     if vecin == dest: dest_gasita = True; break
 
+        # Condiția de STOP
         if not dest_gasita:
-            istoric.append({'iteratie': 'STOP', 'status': 'STOP', 'etichete': etichete, 'df_stare': df.copy()})
+            istoric.append({'iteratie': 'STOP', 'status': 'STOP', 'etichete': etichete, 'df_stare': df.copy(), 'istoric_fluxuri': {k: list(v) for k, v in istoric_fluxuri.items()}})
             break
             
+        # Reconstituire lanț
         lant =[]
         curent = dest
         while curent != sursa:
@@ -137,7 +174,8 @@ def ford_fulkerson(df_arce, sursa, dest):
             curent = parinte
         lant.reverse()
         
-        alphas = []
+        # Calculăm Alpha
+        alphas =[]
         formule_alpha =[]
         for u, v, sens in lant:
             if sens == '+':
@@ -152,61 +190,25 @@ def ford_fulkerson(df_arce, sursa, dest):
                 formule_alpha.append(f"f(x_{int(u)}, x_{int(v)}) = {fmt(rezerva)}")
                 
         alpha = min(alphas)
+        
+        # Actualizăm fluxul și istoricul (pentru desen)
         for u, v, sens in lant:
             idx = df.index[(df['Start (x_i)'] == u) & (df['Destinație (x_j)'] == v)].tolist()[0]
-            if sens == '+': df.at[idx, 'Flux f(u)'] += alpha
-            else: df.at[idx, 'Flux f(u)'] -= alpha
+            if sens == '+': 
+                df.at[idx, 'Flux f(u)'] += alpha
+                istoric_fluxuri[(int(u), int(v))].append(alpha)
+            else: 
+                df.at[idx, 'Flux f(u)'] -= alpha
+                istoric_fluxuri[(int(u), int(v))].append(-alpha)
                 
         istoric.append({
             'iteratie': iteratie, 'status': 'CONTINUA', 'etichete': etichete,
-            'lant': lant, 'alpha': alpha, 'formule_alpha': formule_alpha, 'df_stare': df.copy()
+            'lant': lant, 'alpha': alpha, 'formule_alpha': formule_alpha, 
+            'df_stare': df.copy(), 'istoric_fluxuri': {k: list(v) for k, v in istoric_fluxuri.items()}
         })
         iteratie += 1
         if iteratie > 50: break
     return istoric, df
-
-# ==============================================================================
-# TAB 2: ALGORITMUL UNGAR (KUHN-MUNKRES)
-# ==============================================================================
-def minim_linii_acoperire(mat):
-    """Aplică Teorema lui König pentru a găsi liniile minime care acoperă zerourile."""
-    cost_matrix = np.where(mat == 0, 1, 0)
-    row_ind, col_ind = linear_sum_assignment(cost_matrix, maximize=True)
-    
-    matches =[(r, c) for r, c in zip(row_ind, col_ind) if cost_matrix[r, c] == 1]
-    
-    matched_rows = {r for r, c in matches}
-    unmatched_rows = set(range(mat.shape[0])) - matched_rows
-    
-    visited_rows = set(unmatched_rows)
-    visited_cols = set()
-    queue = list(unmatched_rows)
-    
-    while queue:
-        r = queue.pop(0)
-        for c in range(mat.shape[1]):
-            if cost_matrix[r, c] == 1 and c not in visited_cols:
-                visited_cols.add(c)
-                for mr, mc in matches:
-                    if mc == c and mr not in visited_rows:
-                        visited_rows.add(mr)
-                        queue.append(mr)
-                        break
-                        
-    covered_rows = set(range(mat.shape[0])) - visited_rows
-    return list(covered_rows), list(visited_cols), matches
-
-def deseneaza_graf_bipartit(mat_originala, assignment):
-    graf = graphviz.Digraph()
-    graf.attr(rankdir='LR', splines='false')
-    graf.attr('node', shape='circle', style='filled', fillcolor='#ffecd9', color='#e65c00', fontcolor='#e65c00')
-    
-    for i in range(mat_originala.shape[0]): graf.node(f"X{i}", f"x{i+1}")
-    for j in range(mat_originala.shape[1]): graf.node(f"Y{j}", f"y{j+1}")
-        
-    for r, c in assignment:
-        graf.edge(f"X{r}", f"Y{c}", label=str(int(mat_originala[r, c])), color='#FF1493', penwidth='2')
-    return graf
 
 # ==============================================================================
 # UI PRINCIPAL STREAMLIT
@@ -214,167 +216,94 @@ def deseneaza_graf_bipartit(mat_originala, assignment):
 st.markdown('''
     <div class="title-box">
         <p class="title-text">📐 Cercetări Operaționale - Teoria Grafurilor</p>
-        <p class="subtitle-text">Algoritmul Ford-Fulkerson & Algoritmul Ungar</p>
+        <p class="subtitle-text">Flux Maxim: Algoritmul Ford-Fulkerson</p>
     </div>
 ''', unsafe_allow_html=True)
 
-tab1, tab2 = st.tabs(["🌊 Problema 1: Ford-Fulkerson (Flux)", "🧩 Problema 2: Algoritmul Ungar (Alocare)"])
-
-# ------------------------------------------------------------------------------
-# TAB 1: FORD-FULKERSON
-# ------------------------------------------------------------------------------
-with tab1:
-    col_t1, col_g1 = st.columns([1, 1.2])
-    with col_t1:
-        st.markdown("<h4 style='color:#e65c00;'>1. Structura Rețelei (Date din Curs)</h4>", unsafe_allow_html=True)
-        
-        # Exact datele din curs (cu fluxul inițial pus pe 3 lanțuri -> f0=37)
-        if "tabel_retea" not in st.session_state:
-            date_curs = [
-                [1,2, 20, 10], [1,3, 30, 4],[1,4, 40, 23],
-                [2,5, 20, 0],[2,7, 10, 10],
-                [3,5, 17, 0],[3,8, 24, 4],
-                [4,6, 18, 0],[4,9, 23, 23],
-                [5,7, 10, 0],[5,8, 9, 0],
-                [6,8, 12, 0], [6,9, 8, 0],[7,10, 31, 10], [8,10, 23, 4],[9,10, 42, 23]
-            ]
-            st.session_state.tabel_retea = pd.DataFrame(date_curs, columns=["Start (x_i)", "Destinație (x_j)", "Capacitate c(u)", "Flux f(u)"])
-
-        edited_df = st.data_editor(st.session_state.tabel_retea, num_rows="dynamic", use_container_width=True)
-        noduri_disp = sorted(list(set(edited_df['Start (x_i)']).union(set(edited_df['Destinație (x_j)']))))
-        n_start = st.selectbox("Sursă", noduri_disp, index=0)
-        n_dest = st.selectbox("Destinație", noduri_disp, index=len(noduri_disp)-1)
-
-    with col_g1:
-        st.markdown("<h4 style='color:#e65c00;'>Graful Inițial (Așezare stânga-dreapta)</h4>", unsafe_allow_html=True)
-        st.graphviz_chart(deseneaza_graf_retea(edited_df), use_container_width=True)
-
-    if st.button("🚀 Rulează Ford-Fulkerson", type="primary", use_container_width=True):
-        st.divider()
-        istoric, df_final = ford_fulkerson(edited_df, n_start, n_dest)
-        
-        for pas in istoric:
-            with st.expander(f"🟡 Iterația {pas['iteratie']}", expanded=(pas['status']=='STOP')):
-                str_etichete = ", ".join([f"x_{{{int(n)}}}: \text{{{lbl[0]}}}" for n, lbl in pas['etichete'].items()])
-                st.latex(r"\{ " + str_etichete + r" \}")
-                
-                if pas['status'] == 'CONTINUA':
-                    lant_str = f"x_{{{int(n_start)}}}"
-                    for u, v, sens in pas['lant']:
-                        lant_str += rf" \xrightarrow{{{'+' if sens == '+' else '-'}}} x_{{{int(v)}}}"
-                    st.latex(rf"\mu = [{lant_str}]")
-                    st.latex(r"\alpha = \min \{" + r", ".join(pas['formule_alpha']) + r"\} = " + fmt(pas['alpha']))
-                    st.graphviz_chart(deseneaza_graf_retea(pas['df_stare'], etichete_noduri=pas['etichete'], lant_curent=pas['lant']), use_container_width=True)
-                else:
-                    st.success(f"**STOP!** Destinația nu a mai fost etichetată.")
-                    st.graphviz_chart(deseneaza_graf_retea(pas['df_stare'], etichete_noduri=pas['etichete']), use_container_width=True)
-
-        # Calcul Final
-        st.markdown("<h3 style='color: #e65c00;'>🏆 Soluția Finală și Tăietura Minimă</h3>", unsafe_allow_html=True)
-        flux_iesire = df_final[df_final['Start (x_i)'] == n_start]['Flux f(u)'].sum()
-        flux_intrare = df_final[df_final['Destinație (x_j)'] == n_start]['Flux f(u)'].sum()
-        v_max = flux_iesire - flux_intrare
-        
-        noduri_A = list(istoric[-1]['etichete'].keys())
-        noduri_XA =[n for n in noduri_disp if n not in noduri_A]
-        cap_taietura = df_final[df_final['Start (x_i)'].isin(noduri_A) & df_final['Destinație (x_j)'].isin(noduri_XA)]['Capacitate c(u)'].sum()
-        
-        c1, c2 = st.columns(2)
-        c1.latex(rf"V(f_{{max}}) = {fmt(v_max)}")
-        c2.latex(rf"C(T) = {fmt(cap_taietura)} \implies V(f_{{max}}) = C(T) \text{{ (Corect)}}")
-
-# ------------------------------------------------------------------------------
-# TAB 2: ALGORITMUL UNGAR
-# ------------------------------------------------------------------------------
-with tab2:
-    st.markdown("<h4 style='color:#e65c00;'>Matricea Costurilor Inițiale</h4>", unsafe_allow_html=True)
+col_t1, col_g1 = st.columns([1, 1.2])
+with col_t1:
+    st.markdown("<h4 style='color:#e65c00;'>1. Structura Rețelei</h4>", unsafe_allow_html=True)
+    st.write("Datele sunt introduse conform problemei scrise, plecând deja de la fluxul $f_0 = 37$ pentru a prinde exact iterațiile din curs.")
     
-    if "matrice_ungar" not in st.session_state:
-        # Datele exacte din curs pag 10 (rezultat 166)
-        date_mat = [[55, 23, 83, 61, 66, 22],[99, 81, 14, 77, 61, 55],[59, 39, 58, 49, 24, 54],[36, 10, 37, 62, 28, 33],[73, 51, 51, 24, 26, 55],
-            [72, 54, 78, 91, 89, 96]
+    if "tabel_retea" not in st.session_state:
+        # Date precise din curs, paginile 1-5
+        date_curs =[
+            [1,2, 20, 10],[1,3, 30, 4],[1,4, 40, 23],[2,5, 20, 0],[2,7, 10, 10],[3,5, 17, 0],[3,8, 24, 4],[4,6, 18, 0],[4,9, 23, 23],[5,7, 10, 0],[5,8, 9, 0],[6,8, 12, 0], [6,9, 8, 0],[7,10, 31, 10],[8,10, 23, 4],[9,10, 42, 23]
         ]
-        cols = [f"Y{i+1}" for i in range(6)]
-        st.session_state.matrice_ungar = pd.DataFrame(date_mat, columns=cols, index=[f"X{i+1}" for i in range(6)])
+        st.session_state.tabel_retea = pd.DataFrame(date_curs, columns=["Start (x_i)", "Destinație (x_j)", "Capacitate c(u)", "Flux f(u)"])
 
-    df_mat = st.data_editor(st.session_state.matrice_ungar, use_container_width=True)
+    edited_df = st.data_editor(st.session_state.tabel_retea, num_rows="dynamic", use_container_width=True)
+    noduri_disp = sorted(list(set(edited_df['Start (x_i)']).union(set(edited_df['Destinație (x_j)']))))
     
-    if st.button("🚀 Calculează Alocarea Optimă (Kuhn-Munkres)", type="primary", use_container_width=True):
-        st.divider()
-        mat_orig = df_mat.values.copy()
-        mat = mat_orig.copy()
-        n = mat.shape[0]
-        
-        # PAS 1
-        st.markdown("#### **PAS 1:** Reducerea matricii (Minim Linii și Coloane)")
-        min_l = mat.min(axis=1, keepdims=True)
-        mat = mat - min_l
-        min_c = mat.min(axis=0, keepdims=True)
-        mat = mat - min_c
-        
-        st.write(pd.DataFrame(mat, columns=df_mat.columns, index=df_mat.index))
-        
-        # Iterare PAS 2 și 3
-        iteratie = 1
-        while True:
-            st.markdown(f"#### **PAS 2:** Iterația {iteratie} - Acoperirea Zerourilor")
-            cov_r, cov_c, assignment = minim_linii_acoperire(mat)
-            nr_linii = len(cov_r) + len(cov_c)
-            
-            # Generare HTML pentru a arăta liniile trasaet
-            html = "<table class='matrix-table'>"
-            for i in range(n):
-                html += "<tr>"
-                for j in range(n):
-                    bg = "#ffffff"
-                    if i in cov_r and j in cov_c: bg = "#d0bdf4" # intersecție (2 linii)
-                    elif i in cov_r or j in cov_c: bg = "#e2eefa" # 1 linie
-                    
-                    val = int(mat[i,j])
-                    if val == 0: html += f"<td style='background-color:{bg}; color:red; font-weight:bold;'>0</td>"
-                    else: html += f"<td style='background-color:{bg};'>{val}</td>"
-                html += "</tr>"
-            html += "</table>"
-            st.markdown(html, unsafe_allow_html=True)
-            
-            if nr_linii == n:
-                st.success(f"Număr de linii ({nr_linii}) = m ({n}). STOP Algoritm!")
-                break
-                
-            st.markdown(f"Număr de linii = {nr_linii} $\\neq {n}$. **Se trece la PAS 3.**")
-            
-            # PAS 3
-            uncovered =[]
-            for i in range(n):
-                for j in range(n):
-                    if i not in cov_r and j not in cov_c:
-                        uncovered.append(mat[i,j])
-            
-            sigma = min(uncovered)
-            st.latex(rf"\Sigma_0 = \min(T_1) = {int(sigma)}")
-            
-            for i in range(n):
-                for j in range(n):
-                    if i not in cov_r and j not in cov_c:
-                        mat[i,j] -= sigma
-                    if i in cov_r and j in cov_c:
-                        mat[i,j] += sigma
-            iteratie += 1
+    col_sursa, col_dest = st.columns(2)
+    with col_sursa: n_start = st.selectbox("Sursă", noduri_disp, index=0)
+    with col_dest: n_dest = st.selectbox("Destinație", noduri_disp, index=len(noduri_disp)-1)
 
-        # Rezultat
-        st.divider()
-        st.markdown("### 🏆 Soluția Optimă (Cuplajul Maxim)")
-        c1, c2 = st.columns([1, 1])
-        with c1:
-            cost_total = 0
-            str_alocari =[]
-            for r, c in assignment:
-                cost = mat_orig[r, c]
-                cost_total += cost
-                str_alocari.append(f"C_{{{r+1},{c+1}}}")
+with col_g1:
+    st.markdown("<h4 style='color:#e65c00;'>Graful Curent</h4>", unsafe_allow_html=True)
+    istoric_initial = { (int(r['Start (x_i)']), int(r['Destinație (x_j)'])): [r['Flux f(u)']] if r['Flux f(u)']>0 else[] for _, r in edited_df.iterrows() }
+    st.graphviz_chart(deseneaza_graf_retea(edited_df, istoric_initial), use_container_width=True)
+
+if st.button("🚀 Rulează Ford-Fulkerson", type="primary", use_container_width=True):
+    st.divider()
+    istoric, df_final = ford_fulkerson(edited_df, n_start, n_dest)
+    
+    st.markdown("<h3 style='color: #e65c00;'>⚙️ Etapele Algoritmului</h3>", unsafe_allow_html=True)
+    for pas in istoric:
+        with st.expander(f"🟡 Iterația {pas['iteratie']}", expanded=(pas['status']=='STOP')):
+            str_etichete = ", ".join([f"x_{{{int(n)}}}: \text{{{lbl[0]}}}" for n, lbl in pas['etichete'].items()])
+            st.latex(r"\{ " + str_etichete + r" \}")
             
-            st.latex(r"W_{max} = \{ " + ", ".join([f"(X_{r+1}, Y_{c+1})" for r,c in assignment]) + r" \}")
-            st.latex(rf"V(W_{{max}}) = {' + '.join(str_alocari)} = {int(cost_total)}")
+            if pas['status'] == 'CONTINUA':
+                lant_str = f"x_{{{int(n_start)}}}"
+                for u, v, sens in pas['lant']:
+                    lant_str += rf" \xrightarrow{{{'+' if sens == '+' else '-'}}} x_{{{int(v)}}}"
+                st.latex(rf"\mu = [{lant_str}]")
+                st.latex(r"\alpha = \min \{" + r", ".join(pas['formule_alpha']) + r"\} = " + fmt(pas['alpha']))
+                st.graphviz_chart(deseneaza_graf_retea(pas['df_stare'], pas['istoric_fluxuri'], etichete_noduri=pas['etichete'], lant_curent=pas['lant']), use_container_width=True)
+            else:
+                st.success(f"**TO ($I_{{STOP}}$)**: Destinația NU a mai putut fi etichetată. STOP ALGORITM.")
+                st.graphviz_chart(deseneaza_graf_retea(pas['df_stare'], pas['istoric_fluxuri'], etichete_noduri=pas['etichete']), use_container_width=True)
+
+    # ==========================================================================
+    # VALIDAREA FINALĂ (TĂIETURA) CONFORM PROBLEMELOR SCRISE DE MÂNĂ
+    # ==========================================================================
+    st.divider()
+    st.markdown("### VERIFICARE")
+    
+    # Nodurile marcate și nemarcate
+    noduri_A = list(istoric[-1]['etichete'].keys())
+    noduri_XA = [n for n in noduri_disp if n not in noduri_A]
+    
+    str_XA = ", ".join([f"x_{{{int(n)}}}" for n in noduri_XA])
+    
+    st.write("**① Tăietura $T$** = { mulțimea vf. graf care nu s-au putut eticheta cu etich. de la $I_{STOP}$ }")
+    st.latex(rf"T = \{{ {str_XA} \}} \implies \begin{{cases}} x_s \notin T & \checkmark \\ x_t \in T & \checkmark \end{{cases}}")
+    
+    st.write("**② Grafic Tăietura T** = trasare curbă care:")
+    st.write("* trece doar prin arce saturate;")
+    st.write("* separă vf. marcate cu eticheta $I_{STOP}$ de cele nemarcate cu aceeași etichetă.")
+    
+    st.write("**③ $C(T) = \sum c(u)$** ($u$ arc saturat din tăietură) $\overset{?}{=} f_{max}$")
+    
+    # Calcul Tăietura (Suma capacităților de la A la T)
+    cap_taietura = 0
+    arce_taietura_noduri =[]
+    arce_taietura_valori =[]
+    
+    for _, rand in df_final.iterrows():
+        i, j = rand['Start (x_i)'], rand['Destinație (x_j)']
+        if i in noduri_A and j in noduri_XA:
+            c = rand['Capacitate c(u)']
+            cap_taietura += c
+            arce_taietura_noduri.append((i, j))
+            arce_taietura_valori.append(c)
             
-        with c2:
-            st.graphviz_chart(deseneaza_graf_bipartit(mat_orig, assignment), use_container_width=True)
+    flux_iesire = df_final[df_final['Start (x_i)'] == n_start]['Flux f(u)'].sum()
+    flux_intrare = df_final[df_final['Destinație (x_j)'] == n_start]['Flux f(u)'].sum()
+    f_max = flux_iesire - flux_intrare
+    
+    if arce_taietura_noduri:
+        str_arce_calc = " + ".join([f"c(x_{{{int(u)}}}, x_{{{int(v)}}})" for u, v in arce_taietura_noduri])
+        str_vals_calc = " + ".join([str(int(val)) for val in arce_taietura_valori])
+        st.latex(rf"C(T) = {str_arce_calc} = {str_vals_calc} = {fmt(cap_taietura)} = f_{{max}} \;\; \checkmark")
