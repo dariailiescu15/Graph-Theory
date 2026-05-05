@@ -263,7 +263,7 @@ with tab1:
                     for u, v, sens in pas['lant']:
                         lant_str += rf" \xrightarrow{{{'+' if sens == '+' else '-'}}} x_{{{int(v)}}}"
                     st.latex(rf"\mu = [{lant_str}]")
-                    st.latex(r"\alpha = \min \{" + r", ".join(pas['formule_alpha']) + rf"\} = {fmt(pas['alpha'])}")
+                    st.latex(r"\alpha = \min \{" + r", ".join(pas['formule_alpha']) + r"\} = " + fmt(pas['alpha']))
                     st.graphviz_chart(deseneaza_graf_retea(pas['df_stare'], etichete_noduri=pas['etichete'], lant_curent=pas['lant']), use_container_width=True)
                 else:
                     st.success(f"**STOP!** Destinația nu a mai fost etichetată.")
