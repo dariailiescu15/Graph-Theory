@@ -158,7 +158,6 @@ if st.button("Execută Algoritmul Ungar", type="primary", use_container_width=Tr
                 break
             else:
                 st.warning(f"m ({m}) < n ({n}) (Nu e optim)")
-                st.write("**3. Etichetare:** Se marchează cu * rândurile fără zero încadrat.")
         with col_m:
             st.markdown(draw_matrix(mat, r_cov, c_cov, bx, cr, m_rows, m_cols), unsafe_allow_html=True)
         uncovered = [mat[r, c] for r in range(n) for c in range(n) if r not in r_cov and c not in c_cov]
