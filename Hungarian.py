@@ -4,7 +4,7 @@ import numpy as np
 import graphviz
 
 # ==============================================================================
-# 1. IDENTITATE VIZUALĂ ȘI STILURI ACADEMICE (T1, T2, T3)
+# 1. IDENTITATE VIZUALĂ ȘI STILURI ACADEMICE
 # ==============================================================================
 st.set_page_config(page_title="Algoritmul UNGAR - Studiu Academic", layout="wide", page_icon="🧩")
 
@@ -22,7 +22,7 @@ st.markdown("""
     .matrix-table { border-collapse: collapse; margin: 0 auto; font-family: 'Courier New', monospace; font-size: 18px; border: 2px solid #333; }
     .matrix-table td { border: 1px solid #333; width: 60px; height: 60px; text-align: center; vertical-align: middle; }
     
-    /* Clase corespunzătoare zonelor din Pasul 5 (Curs) */
+    /* Clase corespunzătoare zonelor de tăiere din Pasul 5 (Curs) */
     .t1 { background-color: #ffffff; }        /* T1: Elemente netăiate */
     .t2 { background-color: #ffcc99; }        /* T2: Elemente tăiate o singură dată */
     .t3 { background-color: #e67300; color: white; font-weight: bold; } /* T3: Elemente dublu tăiate (intersecții) */
@@ -35,6 +35,10 @@ st.markdown("""
     .star-sym { color: red; font-weight: bold; font-size: 24px; margin-left: 5px; }
     
     .academic-note { background-color: #f8f9fa; border-left: 5px solid #0056b3; padding: 15px; margin: 10px 0; border-radius: 4px; font-family: 'Segoe UI', sans-serif;}
+    
+    /* Stiluri specifice pentru matricea decizionala */
+    .dec-1 { background-color: #d4edda; color: #155724; font-weight: bold; font-size: 22px; }
+    .dec-0 { background-color: #f8f9fa; color: #ced4da; font-size: 18px; }
     </style>
 """, unsafe_allow_html=True)
 
@@ -61,39 +65,28 @@ st.markdown('''
 # ==============================================================================
 
 def repartizare_manuala_zerouri(mat):
-    """
-    PASUL 3: Determinarea unui cuplaj maxim (Procedura de încadrare - barare)
-    Logica: Se alege linia cu cele mai puține zerouri. Se încadrează primul zero
-    disponibil, iar restul zerourilor de pe acea linie și coloană se barează.
-    Returnează:
-      - boxed: lista de coordonate (i, j) pentru zerourile încadrate (W curent)
-      - crossed: lista de coordonate (i, j) pentru zerourile barate
-    """
     n = mat.shape[0]
-    boxed, crossed = [],[]
-    r_done, c_done = [False] * n, [False] * n
+    boxed, crossed = [], []
+    r_done, c_done =[False] * n, [False] * n
     m_temp = mat.copy()
     
     while True:
-        candidates =[]
-        # Identificăm liniile cu zerouri neprocesate (neîncadrate și nebarate)
+        candidates = []
         for i in range(n):
             if not r_done[i]:
-                zeros =[j for j in range(n) if m_temp[i, j] == 0 and not c_done[j]]
+                zeros = [j for j in range(n) if m_temp[i, j] == 0 and not c_done[j]]
                 if zeros: candidates.append((len(zeros), i, zeros))
                 
-        if not candidates: break # Nu mai există zerouri neprocesate
+        if not candidates: break 
         
-        # Sortăm pentru a procesa prima dată linia cu cele mai puține zerouri (de sus în jos)
         candidates.sort() 
         _, r_idx, z_cols = candidates[0]
-        c_idx = z_cols[0] # Alegem primul zero din linie
+        c_idx = z_cols[0] 
         
         boxed.append((r_idx, c_idx))
         r_done[r_idx] = True
         c_done[c_idx] = True
         
-        # Barăm restul zerourilor de pe linie și coloană
         for j in range(n):
             if m_temp[r_idx, j] == 0 and j != c_idx: crossed.append((r_idx, j))
         for i in range(n):
@@ -102,42 +95,25 @@ def repartizare_manuala_zerouri(mat):
     return sorted(boxed), list(set(crossed))
 
 def procedura_marcaj_lateral(mat, boxed, crossed):
-    """
-    PASUL 4: Determinarea unui suport minim (S) și Tăieturi
-    Aplicăm algoritmul de etichetare (marcare cu '*'):
-      1. Se marchează liniile fără niciun 0 încadrat.
-      2. Se marchează coloanele cu 0 barat situate pe liniile marcate.
-      3. Se marchează liniile cu 0 încadrat situate pe coloanele marcate.
-    Returnează:
-      - r_cov, c_cov: Liniile NETĂIATE și coloanele TĂIATE
-      - m_rows, m_cols: Liniile și coloanele marcate cu '*' (pentru UI)
-    """
     n = mat.shape[0]
     bx_rows = {r for r, c in boxed}
-    m_rows = set(range(n)) - bx_rows # Regula 1
+    m_rows = set(range(n)) - bx_rows 
     m_cols = set()
     
     changed = True
     while changed:
         before = len(m_rows) + len(m_cols)
-        
-        # Regula 2: coloanele cu 0 barat pe linii marcate
         for r, c in crossed:
             if r in m_rows: m_cols.add(c)
-            
-        # Regula 3: liniile cu 0 încadrat pe coloane marcate
         for r, c in boxed:
             if c in m_cols: m_rows.add(r)
-            
         changed = (len(m_rows) + len(m_cols)) != before
         
-    # Conform Teoremei Kőnig-Egerváry, tăieturile se fac pe liniile NEMARCATE și coloanele MARCATE
-    cov_rows =[i for i in range(n) if i not in m_rows]
+    cov_rows = [i for i in range(n) if i not in m_rows]
     cov_cols = list(m_cols)
     return cov_rows, cov_cols, m_rows, m_cols
 
 def draw_html_matrix(mat, r_cov, c_cov, boxed, crossed, m_rows, m_cols, row_mins=None, col_mins=None):
-    """ Generează HTML-ul pentru a reprezenta matricea conform cromaticii din curs (T1, T2, T3) """
     n = mat.shape[0]
     bx, cr = set(boxed), set(crossed)
     
@@ -152,9 +128,9 @@ def draw_html_matrix(mat, r_cov, c_cov, boxed, crossed, m_rows, m_cols, row_mins
         star = '<span class="star-sym">*</span>' if i in m_rows else ''
         html += f'<tr><td><b>x{i+1}</b>{star}</td>'
         for j in range(n):
-            cls = "t1" # Elemente netăiate
-            if i in r_cov and j in c_cov: cls = "t3" # Intersecție (dublu tăiat)
-            elif i in r_cov or j in c_cov: cls = "t2" # Tăiat o singură dată
+            cls = "t1" 
+            if i in r_cov and j in c_cov: cls = "t3" 
+            elif i in r_cov or j in c_cov: cls = "t2" 
             
             val = int(mat[i, j])
             content = str(val)
@@ -172,13 +148,33 @@ def draw_html_matrix(mat, r_cov, c_cov, boxed, crossed, m_rows, m_cols, row_mins
         
     return html + "</table>"
 
+def draw_decision_matrix(n, boxed):
+    """
+    Generează Matricea de Afectare (Variabilele de decizie x_ij),
+    unde elementele sunt 1 (asociere realizată) și 0 în rest.
+    """
+    bx_set = set(boxed)
+    html = '<table class="matrix-table" style="margin: 0;"><tr><td></td>'
+    for j in range(n):
+        html += f'<td><b>y{j+1}</b></td>'
+    html += '</tr>'
+    
+    for i in range(n):
+        html += f'<tr><td><b>x{i+1}</b></td>'
+        for j in range(n):
+            if (i, j) in bx_set:
+                html += '<td class="dec-1">1</td>'
+            else:
+                html += '<td class="dec-0">0</td>'
+        html += '</tr>'
+        
+    return html + "</table>"
+
 # ==============================================================================
 # 3. INTERFAȚĂ UTILIZATOR ȘI EXECUTARE ALGORITM
 # ==============================================================================
 
-# Set de date predefinit (Exemplul din curs/seminar)
-seminar_data =[
-    [99, 21, 53, 46, 18, 80], [34, 20, 79, 65, 11, 14], [76, 10, 73, 56, 47, 42],[79, 39, 76, 80, 81, 24],[37, 95, 89, 83, 73, 19],[74, 54, 91, 34, 20, 85]
+seminar_data =[[99, 21, 53, 46, 18, 80],[34, 20, 79, 65, 11, 14],[76, 10, 73, 56, 47, 42],[79, 39, 76, 80, 81, 24],[37, 95, 89, 83, 73, 19],[74, 54, 91, 34, 20, 85]
 ]
 
 st.subheader("I. Datele problemei (Matricea Costurilor)")
@@ -203,12 +199,10 @@ if st.button("Execută Algoritmul Ungar", type="primary", use_container_width=Tr
         st.write(f"Conform observațiilor teoretice, pentru **maximizare** determinăm $\lambda = \max(c_{{ij}}) = {int(val_max)}$ și lucrăm cu matricea modificată $C^* = \lambda - C$.")
         mat = val_max - mat
 
-    # Pas 2.1: Minime pe linii (u_i)
     st.write("**Reducerea liniilor:** Se scade $u_i$ (minimul fiecărei linii) din elementele liniei respective.")
     r_mins = mat.min(axis=1)
     for i in range(n): mat[i, :] -= r_mins[i]
     
-    # Pas 2.2: Minime pe coloane (v_j)
     st.write("**Reducerea coloanelor:** Se scade $v_j$ (minimul pe coloane, din matricea rezultată) pentru a garanta cel puțin un 0 pe fiecare rând și coloană.")
     c_mins = np.zeros(n)
     for j in range(n):
@@ -230,10 +224,9 @@ if st.button("Execută Algoritmul Ungar", type="primary", use_container_width=Tr
     """, unsafe_allow_html=True)
 
     iter_idx = 1
-    history_eps = []
+    history_eps =[]
     final_bx =[]
 
-    # Buclele iterațiilor - de obicei, optimul e atins in maxim n iteratii
     while iter_idx < 10:
         bx, cr = repartizare_manuala_zerouri(mat)
         m = len(bx)
@@ -268,77 +261,74 @@ if st.button("Execută Algoritmul Ungar", type="primary", use_container_width=Tr
                 st.latex(r"\epsilon = \min(x \in T_1) = " + str(int(eps)))
                 st.write(f"• Se scade $\epsilon = {int(eps)}$ din elementele neacoperite ($T_1$).")
                 st.write(f"• Se adună $\epsilon = {int(eps)}$ la elementele de la intersecții ($T_3$).")
-                st.write("• Elementele tăiate o singură dată ($T_2$) rămân neschimbate.")
                 
         with col_tbl:
             st.markdown(draw_html_matrix(mat, r_cov, c_cov, bx, cr, m_rows, m_cols), unsafe_allow_html=True)
 
-        # Aplicarea logică a Pasului 5
         for r in range(n):
             for c in range(n):
                 if r not in r_cov and c not in c_cov: 
-                    mat[r, c] -= eps   # T1
+                    mat[r, c] -= eps   
                 elif r in r_cov and c in c_cov: 
-                    mat[r, c] += eps   # T3
+                    mat[r, c] += eps   
         
         iter_idx += 1
 
     # ==============================================================================
-    # 4. REZULTATE, FORMULE DE VALIDARE ȘI GRAF BIPARTIT (ASPECT CRESCĂTOR)
+    # 4. REZULTATE FINALE: MATRICEA DE AFECTARE ȘI GRAFUL BIPARTIT
     # ==============================================================================
     st.divider()
-    st.markdown("### REZULTAT FINAL: Cuplajul Maxim Optim")
+    st.markdown("### REZULTAT FINAL: Modelarea Soluției Optime")
     
-    col_rez, col_grf = st.columns([1.2, 1])
+    col_rez, col_grf = st.columns([1, 1])
     
     with col_rez:
         # Reprezentarea formală a cuplajului
-        w_max_elements =[f"(x_{r+1}, y_{c+1})" for r, c in final_bx]
+        w_max_elements = [f"(x_{r+1}, y_{c+1})" for r, c in final_bx]
         st.latex(r"W_{max} = \{ " + ", ".join(w_max_elements) + r" \}")
         
-        # Calcularea costului final
         v_total = sum(mat_orig[r, c] for r, c in final_bx)
         st.success(f"**Valoare Funcție Obiectiv:** $V(W_{{max}}) = {int(v_total)}$")
         
-        # Verificarea analitică utilizând Formula Teoremei (Slide 16)
-        st.info("**Pas 6: Verificare Analitică a valorii optime**")
+        # Verificare
         if tip_opt == "Minimizare a timpului total":
             sum_ui = np.sum(r_mins)
             sum_vj = np.sum(c_mins)
             sum_eps = sum(e * (n - m_val) for e, m_val in history_eps)
-            
-            st.latex(r"V_{min}(W_{max}) = \sum u_i + \sum v_j + \sum \epsilon_k(n - n_k^{\Box})")
-            
-            formula_str = f"Calcul: {int(sum_ui)} (L) + {int(sum_vj)} (C)"
-            if history_eps:
-                eps_strs =[f"{int(e)}({n} - {m_val})" for e, m_val in history_eps]
-                formula_str += f" + {' + '.join(eps_strs)}"
-            
-            st.write(formula_str + f" = **{int(sum_ui + sum_vj + sum_eps)}**")
-        else:
-            st.write("Verificarea pentru funcția de **Maximizare** este confirmată prin însumarea coeficienților asocierilor $W_{max}$ din matricea inițială a costurilor.")
+            st.latex(r"V_{min} = \sum u_i + \sum v_j + \sum \epsilon_k(n - n_k^{\Box})")
+            st.write(f"Verificare: {int(sum_ui)} + {int(sum_vj)} + {int(sum_eps)} = **{int(sum_ui + sum_vj + sum_eps)}**")
+
+        st.markdown("<br><b>Matricea Variabilelor de Decizie ($x_{ij} \in \{0, 1\}$)</b>", unsafe_allow_html=True)
+        st.markdown(draw_decision_matrix(n, final_bx), unsafe_allow_html=True)
 
     with col_grf:
-        st.markdown("**Reprezentarea Geometrică a Grafului Bipartit Asociat**")
+        st.markdown("<b>Reprezentarea Geometrică a Grafului Bipartit Asociat</b>", unsafe_allow_html=True)
         
-        # Generarea Grafului Bipartit (Ordonat strict crescător)
+        # Generarea Grafului Bipartit Ordonat (2 coloane top-down paralele)
         dot = graphviz.Digraph(engine='dot')
-        dot.attr(rankdir='LR', splines='line', nodesep='0.6', ranksep='2') # LR ne ajută să punem X la stânga și Y la dreapta
-        dot.attr('node', shape='circle', style='filled', fontname='Helvetica', fontcolor='white', width='0.5')
+        dot.attr(rankdir='LR', ranksep='2.5', nodesep='0.4')
+        dot.attr('node', shape='circle', style='filled', fontcolor='white', fontname='Helvetica-bold', width='0.6')
         
-        # Artificiu pentru a forța alinierea orizontală pe rânduri egale:
-        # Folosim muchii invizibile (style='invis') între perechile (Xi, Yi). 
-        # Astfel, X1 stă mereu în dreptul lui Y1, X2 în dreptul lui Y2, rezultând o listă verticală perfectă.
-        for i in range(n):
-            dot.node(f'X{i}', f'x{i+1}', color='#e65c00', fillcolor='#e65c00')
-            dot.node(f'Y{i}', f'y{i+1}', color='#2e7d32', fillcolor='#2e7d32')
+        # Cluster/Subgraph pentru nodurile X (garantează alinierea pe o singură coloană)
+        with dot.subgraph() as s_x:
+            s_x.attr(rank='same')
+            for i in range(n):
+                s_x.node(f'X{i}', f'x{i+1}', color='#e65c00', fillcolor='#e65c00')
+                
+        # Cluster/Subgraph pentru nodurile Y (garantează alinierea pe a doua coloană)
+        with dot.subgraph() as s_y:
+            s_y.attr(rank='same')
+            for j in range(n):
+                s_y.node(f'Y{j}', f'y{j+1}', color='#2e7d32', fillcolor='#2e7d32')
+                
+        # Muchii invizibile (cu pondere mare) pentru a forța ordinea top-down (x1 -> x2 -> x3...)
+        for i in range(n - 1):
+            dot.edge(f'X{i}', f'X{i+1}', style='invis', weight='100')
+            dot.edge(f'Y{i}', f'Y{i+1}', style='invis', weight='100')
             
-            # Muchie invizibilă pentru a bloca Xi și Yi pe aceeași axă orizontală (în desen)
-            dot.edge(f'X{i}', f'Y{i}', style='invis')
-
-        # Adăugăm muchiile efective ale cuplajului maxim determinat de algoritm
+        # Muchiile soluției optime (Săgețile reale de la X la Y)
         for r, c in final_bx:
             dot.edge(f'X{r}', f'Y{c}', label=str(int(mat_orig[r, c])), 
-                     color='#333333', penwidth='1.5', fontcolor='#e65c00', fontsize='12', fontname='Helvetica-bold')
+                     color='#333333', fontcolor='#333333', penwidth='2.0', arrowhead='normal', arrowsize='0.8')
             
         st.graphviz_chart(dot)
