@@ -58,7 +58,7 @@ st.markdown('''
 # ==============================================================================
 
 def procedura_repartizare(mat):
-    """Realizează încadrarea și bararea zerourilor conform regulii din seminar."""
+    """Realizează încadrarea și bararea zerourilor."""
     n = mat.shape[0]
     boxed, crossed = [], []
     r_done, c_done = [False] * n, [False] * n
@@ -153,7 +153,7 @@ seminar_data = [
     [79, 39, 76, 80, 81, 24], [37, 95, 89, 83, 73, 19], [74, 54, 91, 34, 20, 85]
 ]
 
-st.subheader("I. Matricea Costurilor Inițială (Date Seminar)")
+st.subheader("I. Matricea Costurilor 'C' ")
 df_in = st.data_editor(pd.DataFrame(seminar_data, 
                                     columns=[f"y{i+1}" for i in range(6)], 
                                     index=[f"x{i+1}" for i in range(6)]), 
