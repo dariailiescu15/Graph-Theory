@@ -7,7 +7,7 @@ from scipy.optimize import linear_sum_assignment
 # ==============================================================================
 # CONFIGURARE PAGINĂ ȘI STILURI
 # ==============================================================================
-st.set_page_config(page_title="Algoritmul Ungar (Kuhn-Munkres)", layout="wide", page_icon="🧩")
+st.set_page_config(page_title="Algoritmul Ungar", layout="wide", page_icon="🧩")
 
 st.markdown("""
     <style>
@@ -22,44 +22,38 @@ st.markdown("""
     .validation-box { background-color: #fff4ea; border-left: 5px solid #e65c00; padding: 15px; margin-top: 20px; color: #333; }
     
     .matrix-table { border-collapse: collapse; margin: 0 auto; font-family: 'Helvetica', sans-serif; font-size: 18px; }
-    .matrix-table td { border: 1px solid #cc5200; width: 50px; height: 50px; text-align: center; vertical-align: middle; }
+    .matrix-table td { border: 1px solid #cc5200; width: 45px; height: 45px; text-align: center; vertical-align: middle; }
+    
+    .legend-box { display: flex; justify-content: center; gap: 20px; margin-bottom: 15px; font-size: 15px; }
+    .legend-item { display: flex; align-items: center; gap: 8px; }
+    .color-box { width: 20px; height: 20px; border: 1px solid #ccc; }
     </style>
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# ALGORITMI MATEMATICI: TEOREMA LUI KŐNIG (ACOPERIREA ZEROURILOR)
+# ALGORITMI MATEMATICI: ACOPERIREA ZEROURILOR (TEOREMA LUI KŐNIG)
 # ==============================================================================
 def minim_linii_acoperire(mat):
-    """
-    Aplică demonstrația constructivă a Teoremei lui Kőnig pentru a găsi 
-    numărul minim de linii și coloane necesare pentru a acoperi toate zerourile.
-    """
+    """Aplică Teorema lui Kőnig pentru determinarea acoperirii minime a zerourilor."""
     n = mat.shape[0]
     
-    # 1. Găsim un cuplaj maxim pe graful bipartit al zerourilor
     bool_mat = np.where(mat == 0, 0, 1)
     row_ind, col_ind = linear_sum_assignment(bool_mat)
     
-    # Extragem muchiile cuplajului care corespund strict zerourilor
     matches =[(r, c) for r, c in zip(row_ind, col_ind) if mat[r, c] == 0]
     
     matched_rows = set([r for r, c in matches])
-    matched_cols = set([c for r, c in matches])
-    
-    # 2. Vârfurile necuplate din X (Linii)
     unmatched_rows = set(range(n)) - matched_rows
     
     visited_rows = set(unmatched_rows)
     visited_cols = set()
     queue = list(unmatched_rows)
     
-    # 3. Explorare (Căutarea drumurilor alternante)
     while queue:
         r = queue.pop(0)
         for c in range(n):
             if mat[r, c] == 0 and c not in visited_cols:
                 visited_cols.add(c)
-                # Există un r_matched cuplat cu c?
                 r_matched =[mr for mr, mc in matches if mc == c]
                 if r_matched:
                     mr = r_matched[0]
@@ -67,17 +61,15 @@ def minim_linii_acoperire(mat):
                         visited_rows.add(mr)
                         queue.append(mr)
                         
-    # 4. Suportul minim este format din Liniile NEvizitate și Coloanele VIZITATE
     covered_rows = set(range(n)) - visited_rows
     covered_cols = visited_cols
     
     return list(covered_rows), list(covered_cols), matches
 
 # ==============================================================================
-# MODULUL DE REPREZENTARE GRAFICĂ (GRAPHVIZ)
+# MODULUL DE REPREZENTARE GRAFICĂ ȘI VIZUALĂ
 # ==============================================================================
 def deseneaza_graf_bipartit(mat_originala, assignment):
-    """Generează graful simplu bipartit pentru cuplajul maxim determinat."""
     graf = graphviz.Digraph()
     graf.attr(rankdir='LR', splines='false', bgcolor='transparent')
     graf.attr('node', shape='circle', style='filled', fillcolor='#f8f9fa', color='#e65c00', fontcolor='#e65c00', fontname='Helvetica', penwidth='2')
@@ -94,7 +86,6 @@ def deseneaza_graf_bipartit(mat_originala, assignment):
         for j in range(n):
             c.node(f"y{j+1}", f"y{j+1}")
             
-    # Trasarea arcelor (muchiilor) asociate soluției optime
     for r, c in assignment:
         cost = int(mat_originala[r, c])
         graf.edge(f"x{r+1}", f"y{c+1}", label=str(cost), color='#e65c00', penwidth='3', fontcolor='#cc5200', fontsize='14', fontname='Helvetica-bold')
@@ -102,12 +93,20 @@ def deseneaza_graf_bipartit(mat_originala, assignment):
     return graf
 
 def genereaza_html_matrice(mat, cov_r=None, cov_c=None):
-    """Generează reprezentarea vizuală a matricei cu liniile de acoperire."""
     if cov_r is None: cov_r =[]
     if cov_c is None: cov_c =[]
     
     n = mat.shape[0]
-    html = "<table class='matrix-table'>"
+    
+    html = '''
+    <div class="legend-box">
+        <div class="legend-item"><div class="color-box" style="background-color:#ffffff;"></div> T₁ (Neacoperit)</div>
+        <div class="legend-item"><div class="color-box" style="background-color:#ffe8cc;"></div> T₂ (Acoperit 1 dată)</div>
+        <div class="legend-item"><div class="color-box" style="background-color:#ffc299;"></div> T₃ (Intersecție/Dublu)</div>
+    </div>
+    <table class="matrix-table">
+    '''
+    
     for i in range(n):
         html += "<tr>"
         for j in range(n):
@@ -116,9 +115,9 @@ def genereaza_html_matrice(mat, cov_r=None, cov_c=None):
             
             bg_color = "#ffffff"
             if i in cov_r and j in cov_c:
-                bg_color = "#ffc299" # Dublu acoperit (Intersecție)
+                bg_color = "#ffc299" # T3
             elif i in cov_r or j in cov_c:
-                bg_color = "#ffe8cc" # Acoperit o singură dată
+                bg_color = "#ffe8cc" # T2
                 
             color = "#cc5200" if is_zero else "#333333"
             fw = "bold" if is_zero else "normal"
@@ -152,15 +151,14 @@ col_tabel, col_explicatii = st.columns([1, 1])
 
 with col_tabel:
     st.markdown("#### Matricea Costurilor ($C$)")
-    st.write("Datele inițiale reprezintă costurile. Exemplul implicit reflectă rezolvarea din curs care obține costul $166$.")
+    st.write("Datele inițiale reprezintă costurile. Exemplul implicit reflectă rezolvarea din curs care obține costul final de $166$.")
     
     if "matrice_ungar" not in st.session_state:
-        # Datele exacte din notițele scrise de mână (pag. 9-12), soluție = 166
-        date_initiale = [[55, 23, 83, 61, 66, 22],[99, 81, 14, 77, 61, 55],[59, 39, 58, 49, 24, 54],[36, 10, 37, 62, 28, 33],[73, 51, 51, 24, 26, 55],
-            [72, 54, 78, 91, 89, 96]
+        # Datele exacte din notițele scrise de mână (soluție = 166)
+        date_initiale = [[55, 23, 83, 61, 66, 22],[99, 81, 14, 77, 61, 55],[59, 39, 58, 49, 24, 54],[36, 10, 37, 62, 28, 33],[73, 51, 51, 24, 26, 55],[72, 54, 78, 91, 89, 96]
         ]
         cols = [f"y_{i+1}" for i in range(6)]
-        idx = [f"x_{i+1}" for i in range(6)]
+        idx =[f"x_{i+1}" for i in range(6)]
         st.session_state.matrice_ungar = pd.DataFrame(date_initiale, columns=cols, index=idx)
 
     df_mat = st.data_editor(st.session_state.matrice_ungar, use_container_width=True)
@@ -170,7 +168,7 @@ with col_explicatii:
         <div class="validation-box" style="margin-top: 0;">
             <b>Obiectiv:</b> Determinarea unui cuplaj maxim de valoare optimă (minimă) în graful simplu bipartit.<br><br>
             <b>Model matematic:</b>
-            <br>Fie <i>X</i> muncitorii și <i>Y</i> sarcinile. Căutăm să minimizăm:
+            <br>Fie <i>X</i> resursele și <i>Y</i> sarcinile. Căutăm să minimizăm costul total:
             $$ V(W_{max}) = \sum_{(x_i, y_j) \in W_{max}} c_{ij} $$
         </div>
     ''', unsafe_allow_html=True)
@@ -182,35 +180,36 @@ if st.button("Execută Algoritmul Ungar", type="primary", use_container_width=Tr
     mat = mat_orig.copy()
     n = mat.shape[0]
     
-    # Variabile pentru VALIDARE
     sum_min_l = 0
     sum_min_c = 0
     istoric_sigma =[]
+    str_min_l_calc = ""
+    str_min_c_calc = ""
     
     st.markdown("### Etapele Analitice ale Algoritmului")
     
     # --------------------------------------------------------------------------
     # PAS 1: Crearea de zerouri (scăderea minimului pe linii și coloane)
     # --------------------------------------------------------------------------
-    with st.expander("PASUL 1: Matricea costurilor și crearea zerourilor", expanded=True):
-        col_m1, col_m2 = st.columns(2)
+    with st.expander("PASUL 1: Reducerea Matricei (Crearea Zerourilor)", expanded=True):
+        col_m1, col_m2 = st.columns([1.2, 1])
         
-        # Scăderea pe linii
         min_l = mat.min(axis=1, keepdims=True)
         mat = mat - min_l
-        sum_min_l = float(min_l.sum())
+        sum_min_l = int(min_l.sum())
+        str_min_l_calc = " + ".join([str(int(v)) for v in min_l.flatten()])
         
-        # Scăderea pe coloane
         min_c = mat.min(axis=0, keepdims=True)
         mat = mat - min_c
-        sum_min_c = float(min_c.sum())
+        sum_min_c = int(min_c.sum())
+        str_min_c_calc = " + ".join([str(int(v)) for v in min_c.flatten()])
         
         with col_m1:
-            st.write("**Reducerea matricei:** Scădem din fiecare linie minimul ei $\Rightarrow MIN(L)$. Apoi, din coloane $\Rightarrow MIN(C)$.")
-            str_min_l = ", ".join([str(int(val)) for val in min_l.flatten()])
-            str_min_c = ", ".join([str(int(val)) for val in min_c.flatten()])
-            st.latex(r"MIN(L) = \{" + str_min_l + r"\}")
-            st.latex(r"MIN(C) = \{" + str_min_c + r"\}")
+            st.write("**A. Scăderea pe Linii ($MIN(L)$):** Se identifică și se extrage minimul de pe fiecare linie.")
+            st.latex(r"\sum MIN(L) = " + str_min_l_calc + f" = {sum_min_l}")
+            
+            st.write("**B. Scăderea pe Coloane ($MIN(C)$):** Pentru matricea rezultată, se scade minimul fiecărei coloane.")
+            st.latex(r"\sum MIN(C) = " + str_min_c_calc + f" = {sum_min_c}")
             
         with col_m2:
             st.markdown(genereaza_html_matrice(mat), unsafe_allow_html=True)
@@ -224,24 +223,25 @@ if st.button("Execută Algoritmul Ungar", type="primary", use_container_width=Tr
         m_lines = len(cov_r) + len(cov_c)
         
         if m_lines == n:
-            # STOP ALGORITM
-            with st.expander(f"Iterația {iteratie} - Testul de optimalitate ($m = n$)", expanded=True):
-                col_i1, col_i2 = st.columns(2)
+            with st.expander(f"Iterația {iteratie} - Testul de optimalitate", expanded=True):
+                col_i1, col_i2 = st.columns([1.2, 1])
                 with col_i1:
                     st.success(f"**STOP Algoritm!**")
-                    st.write(f"Numărul minim de linii pentru a acoperi zerourile este $m = {m_lines}$.")
-                    st.latex(rf"m = n = {n} \implies \text{{Soluție optimă (Cuplaj Maxim)}}")
+                    st.write(f"Numărul minim de linii pentru a acoperi toate zerourile este $m = {m_lines}$.")
+                    st.latex(r"m = n = " + str(n) + r" \implies \text{Soluție optimă (Cuplaj Maxim)}")
                 with col_i2:
                     st.markdown(genereaza_html_matrice(mat, cov_r, cov_c), unsafe_allow_html=True)
             break
             
         else:
-            # DEPLASAREA ZEROURILOR
             with st.expander(f"Iterația {iteratie} - Deplasarea zerourilor ($m < n$)", expanded=False):
-                col_i1, col_i2 = st.columns(2)
+                col_i1, col_i2 = st.columns([1.2, 1])
                 with col_i1:
-                    st.warning(f"**Continuăm!** Numărul minim de linii este $m = {m_lines} < {n}$.")
-                    st.write("Identificăm elementul minim $\Sigma$ din celulele **neacoperite** ($T_1$).")
+                    st.warning(f"**Se impune o deplasare!** Numărul de linii $m = {m_lines} < {n}$.")
+                    
+                    st.latex(r"T_1 = \text{elemente netăiate}")
+                    st.latex(r"T_2 = \text{elemente tăiate o singură dată}")
+                    st.latex(r"T_3 = \text{elemente dublu tăiate (intersecții)}")
                     
                     uncovered =[]
                     for i in range(n):
@@ -250,19 +250,17 @@ if st.button("Execută Algoritmul Ungar", type="primary", use_container_width=Tr
                                 uncovered.append(mat[i, j])
                                 
                     sigma_val = min(uncovered)
-                    st.latex(rf"\Sigma_{iteratie} = \min(T_1) = {int(sigma_val)}")
+                    st.latex(r"\Sigma_{" + str(iteratie) + r"} = \min(T_1) = " + str(int(sigma_val)))
                     
-                    # Salvăm sigma și m-ul din acest pas pentru validare
                     istoric_sigma.append((sigma_val, m_lines))
                     
-                    st.write("• Scădem $\Sigma$ din elementele neacoperite.")
-                    st.write("• Adunăm $\Sigma$ la intersecțiile liniilor dublu tăiate.")
+                    st.write("Aplicăm deplasarea:")
+                    st.latex(r"T_1 \leftarrow T_1 - \Sigma_{" + str(iteratie) + r"}")
+                    st.latex(r"T_3 \leftarrow T_3 + \Sigma_{" + str(iteratie) + r"}")
                     
                 with col_i2:
-                    st.write("**Matricea înainte de ajustare:** (portocaliu = linii de acoperire)")
                     st.markdown(genereaza_html_matrice(mat, cov_r, cov_c), unsafe_allow_html=True)
                     
-                # Aplicarea Sigma
                 for i in range(n):
                     for j in range(n):
                         if i not in cov_r and j not in cov_c:
@@ -274,61 +272,58 @@ if st.button("Execută Algoritmul Ungar", type="primary", use_container_width=Tr
         if iteratie > 20: break 
 
     # --------------------------------------------------------------------------
-    # SOLUȚIA FINALĂ (Cuplajul și Costul)
+    # SOLUȚIA FINALĂ ȘI GRAFUL
     # --------------------------------------------------------------------------
     st.divider()
     st.markdown("### 🏆 Soluția Finală și Graful Bipartit")
     
-    col_rez1, col_rez2 = st.columns([1, 1.2])
+    col_rez1, col_rez2 = st.columns([1.2, 1])
     
+    assignment.sort(key=lambda x: x[0])
+    cost_total = 0
+    str_costuri =[]
+    for r, c in assignment:
+        val = mat_orig[r, c]
+        cost_total += val
+        str_costuri.append(str(int(val)))
+        
     with col_rez1:
         st.markdown('''
             <div class="validation-box" style="margin-top: 0; background-color: #f8f9fa;">
                 <h4 style="color:#e65c00; margin-top:0;">Cuplajul Maxim ($W_{max}$)</h4>
-                Fiecare element <i>x_i</i> a fost alocat unic unui element <i>y_j</i> garantând costul global minim.
             </div>
         ''', unsafe_allow_html=True)
         
-        assignment.sort(key=lambda x: x[0])
         str_cuplaje = ", ".join([f"(x_{r+1}, y_{c+1})" for r, c in assignment])
         st.latex(r"W_{max} = \{ " + str_cuplaje + r" \}")
-        
-        cost_total = 0
-        str_costuri =[]
-        for r, c in assignment:
-            val = mat_orig[r, c]
-            cost_total += val
-            str_costuri.append(str(int(val)))
-            
         st.latex(r"V(W_{max}) = " + " + ".join(str_costuri) + f" = {int(cost_total)}")
 
     with col_rez2:
-        st.write("**Reprezentarea grafică a alocării (Graf Simplu Bipartit):**")
         st.graphviz_chart(deseneaza_graf_bipartit(mat_orig, assignment), use_container_width=True)
 
     # --------------------------------------------------------------------------
-    # VALIDAREA SOLUȚIEI (Conform cursurilor / notițelor de mână)
+    # VALIDAREA SOLUȚIEI PE BAZA TEOREMEI (Validarea pe parcurs și de final)
     # --------------------------------------------------------------------------
     st.divider()
-    st.markdown("### ✅ Validarea Soluției (Demonstrația Analitică)")
+    st.markdown("### ✅ Validarea Analitică a Soluției")
+    st.write("Pentru validarea corectitudinii algoritmului, reconstruim costul global folosind minimele extrase în parcurgeri:")
     
-    st.write("Verificăm corectitudinea rezultatului folosind teorema de validare:")
     st.latex(r"V(W_{max}) = \sum MIN(L) + \sum MIN(C) + \sum_{k} \Sigma_k(n - m_k)")
     
-    # Calculul și formatarea șirului pentru formula finală
-    val_l = f"{int(sum_min_l)}"
-    val_c = f"{int(sum_min_c)}"
-    str_sigmas = ""
+    # Construim șirul ecuației cu paranteze la fel ca în notițele scrise
+    termeni_formule =[f"({str_min_l_calc})", f"({str_min_c_calc})"]
     calc_sigmas = 0
     
     if istoric_sigma:
-        for (sig, m_val) in istoric_sigma:
-            str_sigmas += rf" + {int(sig)}({n} - {m_val})"
+        for sig, m_val in istoric_sigma:
+            termeni_formule.append(f"{int(sig)}({n} - {m_val})")
             calc_sigmas += sig * (n - m_val)
             
+    str_formula_completa = " + ".join(termeni_formule)
     val_total = sum_min_l + sum_min_c + calc_sigmas
     
-    st.latex(rf"V(W_{{max}}) = {val_l} + {val_c} {str_sigmas} = {int(val_total)} \quad \checkmark")
+    st.latex(r"V(W_{max}) = " + str_formula_completa)
+    st.latex(r"V(W_{max}) = " + f"{sum_min_l} + {sum_min_c}" + (f" + {int(calc_sigmas)}" if calc_sigmas > 0 else "") + f" = {int(val_total)} \quad \checkmark")
     
     if int(val_total) == int(cost_total):
-        st.success(f"**Validare matematică încheiată cu succes!** Costul optim calculat din graf ($V(W_{{max}}) = {int(cost_total)}$) este perfect echivalent cu demonstrația teoretică ({int(val_total)}).")
+        st.success(f"**Verificare reușită!** Demonstrația analitică confirmă rezultatul obținut pe graful bipartit.")
