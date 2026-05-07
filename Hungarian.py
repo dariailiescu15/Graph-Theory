@@ -207,8 +207,8 @@ if st.button("Execută Algoritmul Ungar", type="primary", use_container_width=Tr
         col_txt, col_tbl = st.columns([1, 2])
         with col_txt:
             st.write(f"**1. Repartizarea zerourilor:**")
-            st.write(f"• Zerouri încadrate ($\boxed{0}$): **m = {m}**")
-            st.write(f"• Zerouri barate ($\not{0}$): **{len(cr)}**")
+            st.write(f"• Zerouri încadrate: **m = {m}**")
+            st.write(f"• Zerouri barate : **{len(cr)}**")
             
             st.write(f"**2. Testul de optimalitate:**")
             if m == n:
@@ -220,7 +220,6 @@ if st.button("Execută Algoritmul Ungar", type="primary", use_container_width=Tr
                 st.warning(f"Deoarece **m ({m}) < n ({n})**, soluția nu este optimă. Se trece la etapa de marcaj și ajustare.")
                 
                 st.write("**3. Procedura de etichetare și marcaj:**")
-                st.write("- Se marchează cu $*$ rândurile fără $\boxed{0}$.")
                 st.write("- Se parcurg coloanele și rândurile pentru a stabili suportul minim (liniile portocalii $T_2$).")
         
         with col_tbl:
