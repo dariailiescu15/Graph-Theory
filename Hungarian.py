@@ -4,7 +4,7 @@ import numpy as np
 import graphviz
 
 # ==============================================================================
-# 1. IDENTITATE VIZUALĂ ȘI ANTET ACADEMIC
+# 1. IDENTITATE VIZUALĂ ȘI STILURI ACADEMICE
 # ==============================================================================
 st.set_page_config(page_title="Algoritmul UNGAR - Studiu Academic", layout="wide", page_icon="🧩")
 
@@ -22,9 +22,12 @@ st.markdown("""
     .matrix-table td { border: 1px solid #333; width: 60px; height: 60px; text-align: center; vertical-align: middle; }
     
     /* Clasificare elemente conform curs (T1, T2, T3) */
-    .t1 { background-color: #ffffff; } /* Elemente neacoperite */
-    .t2 { background-color: #ffb366; } /* Portocaliu - Elemente tăiate o dată */
-    .t3 { background-color: #e67300; } /* Portocaliu închis - Intersecții */
+    .t1 { background-color: #ffffff; } 
+    .t2 { background-color: #ffb366; } /* Portocaliu - Tăietură (T2) */
+    .t3 { background-color: #e67300; } /* Portocaliu închis - Intersecție (T3) */
+    
+    /* Evidențiere minime (Reducerile inițiale) */
+    .min-cell { background-color: #e3f2fd; color: #0d47a1; font-weight: bold; border: 2px solid #1565c0 !important; }
     
     .boxed-zero { border: 2px solid black; padding: 4px; font-weight: bold; display: inline-block; background: white; line-height: 1; }
     .crossed-zero { text-decoration: line-through; color: #777; font-weight: bold; }
@@ -32,10 +35,11 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+# Antet Titlu și Autori
 st.markdown('''
     <div class="title-box">
         <p class="title-text">Cercetări Operaționale - Teoria Grafurilor</p>
-        <p class="subtitle-text">Algoritmul UNGAR (AU) - Problema de Afectare</p>
+        <p class="subtitle-text">Algoritmul UNGAR (AU) - Soluționarea Problemelor de Afectare</p>
     </div>
     
     <div class="authors-box">
@@ -50,14 +54,11 @@ st.markdown('''
 ''', unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. LOGICA MATEMATICĂ A ALGORITMULUI
+# 2. LOGICA MATEMATICĂ (REPARTIZARE ȘI MARCAJ)
 # ==============================================================================
 
-def repartizare_zerouri(mat):
-    """
-    Efectuează repartizarea manuală a zerourilor (Încadrare/Barare).
-    Regula: Linia cu cel mai mic nr. de zerouri -> Încaidrează -> Barează pe linie și coloană.
-    """
+def procedura_repartizare(mat):
+    """Realizează încadrarea și bararea zerourilor conform regulii din seminar."""
     n = mat.shape[0]
     boxed, crossed = [], []
     r_done, c_done = [False] * n, [False] * n
@@ -66,12 +67,12 @@ def repartizare_zerouri(mat):
         candidates = []
         for i in range(n):
             if not r_done[i]:
-                # Zerouri disponibile pe coloane neocupate
+                # Căutăm zerouri în coloane care nu au deja un zero încadrat
                 zeros = [j for j in range(n) if mat[i,j] == 0 and not c_done[j]]
                 if zeros: candidates.append((len(zeros), i, zeros))
         
         if not candidates: break
-        candidates.sort() # Prioritate liniilor cu zerouri puține
+        candidates.sort() # Prioritate rândurilor cu cele mai puține zerouri
         _, r_idx, z_cols = candidates[0]
         c_idx = z_cols[0]
 
@@ -79,14 +80,14 @@ def repartizare_zerouri(mat):
         r_done[r_idx] = True
         c_done[c_idx] = True
 
-        # Barăm restul zerourilor conflictuale
+        # Barăm restul zerourilor de pe rândul și coloana curentă
         for j in range(n):
             if mat[r_idx, j] == 0 and j != c_idx: crossed.append((r_idx, j))
             if mat[j, c_idx] == 0 and j != r_idx: crossed.append((j, c_idx))
-    return boxed, list(set(crossed))
+    return sorted(boxed), list(set(crossed))
 
-def procedura_marcaj(mat, boxed, crossed):
-    """Implementează procedura de marcaj lateral cu '*' pentru suportul minim."""
+def procedura_marcaj_lateral(mat, boxed, crossed):
+    """Marcaj lateral cu '*' pentru a identifica liniile și coloanele ce formează suportul minim."""
     n = mat.shape[0]
     bx_rows = {r for r, c in boxed}
     m_rows = set(range(n)) - bx_rows
@@ -95,18 +96,20 @@ def procedura_marcaj(mat, boxed, crossed):
     changed = True
     while changed:
         before = len(m_rows) + len(m_cols)
+        # Marcăm coloanele cu 0 barat pe rânduri marcate
         for r, c in crossed:
             if r in m_rows: m_cols.add(c)
+        # Marcăm rândurile cu 0 încadrat pe coloane marcate
         for r, c in boxed:
             if c in m_cols: m_rows.add(r)
         changed = (len(m_rows) + len(m_cols)) != before
 
+    # Tăieturile (Suportul Minim): Rânduri Nemarcate și Coloane Marcate
     cov_rows = [i for i in range(n) if i not in m_rows]
     cov_cols = list(m_cols)
     return cov_rows, cov_cols, m_rows, m_cols
 
-def draw_html_matrix(mat, r_cov, c_cov, boxed, crossed, m_rows, m_cols, row_mins=None, col_mins=None):
-    """Construiește tabelul HTML cu toate elementele vizuale cerute."""
+def get_html_matrix(mat, r_cov, c_cov, boxed, crossed, m_rows, m_cols, row_mins=None, col_mins=None):
     n = mat.shape[0]
     bx, cr = set(boxed), set(crossed)
     
@@ -114,7 +117,7 @@ def draw_html_matrix(mat, r_cov, c_cov, boxed, crossed, m_rows, m_cols, row_mins
     for j in range(n):
         star = '<span class="star-sym">*</span>' if j in m_cols else ''
         html += f'<td>y{j+1}{star}</td>'
-    if row_mins is not None: html += '<td>MIN L</td>'
+    if row_mins is not None: html += '<td class="min-cell">MIN L</td>'
     html += '</tr>'
     
     for i in range(n):
@@ -130,96 +133,99 @@ def draw_html_matrix(mat, r_cov, c_cov, boxed, crossed, m_rows, m_cols, row_mins
             if (i, j) in bx: content = '<span class="boxed-zero">0</span>'
             elif (i, j) in cr: content = '<span class="crossed-zero">0</span>'
             html += f'<td class="{cls}">{content}</td>'
-        if row_mins is not None: html += f'<td>{int(row_mins[i])}</td>'
+        if row_mins is not None: html += f'<td class="min-cell">{int(row_mins[i])}</td>'
         html += '</tr>'
     
     if col_mins is not None:
-        html += '<tr><td>MIN C</td>'
-        for v in col_mins: html += f'<td>{int(v) if v > 0 else "-"}</td>'
+        html += '<tr><td class="min-cell">MIN C</td>'
+        for v in col_mins: 
+            html += f'<td class="min-cell">{int(v) if v > 0 else "-"}</td>'
         html += '<td></td></tr>'
-        
     return html + "</table>"
 
 # ==============================================================================
-# 3. INTERFAȚĂ ȘI EXECUTAREA SEMINARULUI
+# 3. INTERFAȚĂ ȘI EXECUTARE
 # ==============================================================================
 
+# Datele din seminar (Pagina 4)
 seminar_data = [
     [99, 21, 53, 46, 18, 80], [34, 20, 79, 65, 11, 14], [76, 10, 73, 56, 47, 42],
     [79, 39, 76, 80, 81, 24], [37, 95, 89, 83, 73, 19], [74, 54, 91, 34, 20, 85]
 ]
 
-st.subheader("I. Datele Problemei (Matricea Costurilor)")
+st.subheader("I. Matricea Costurilor Inițială (Date Seminar)")
 df_in = st.data_editor(pd.DataFrame(seminar_data, 
                                     columns=[f"y{i+1}" for i in range(6)], 
                                     index=[f"x{i+1}" for i in range(6)]), 
                        use_container_width=True)
 
-if st.button("Execută Algoritmul Pas cu Pas", type="primary", use_container_width=True):
+if st.button("Execută Reducerile și Identifică $W_{max}$", type="primary", use_container_width=True):
     mat_orig = df_in.values.copy()
     mat = mat_orig.astype(float)
     n = mat.shape[0]
 
-    # --- ETAPA 1: REDUCEREA PE LINII ---
-    st.markdown("### PAS 1: Reducerea pe Linii")
+    # --- PAS 1: REDUCEREA PE LINII ---
+    st.markdown("### PAS 1: Reducerea pe Linii (Identificare $MIN L$)")
     r_mins = mat.min(axis=1)
-    # Afișăm matricea cu minimele pe linii înainte de scădere
-    st.markdown(draw_html_matrix(mat, [], [], [], [], set(), set(), row_mins=r_mins), unsafe_allow_html=True)
+    st.markdown(get_html_matrix(mat, [], [], [], [], set(), set(), row_mins=r_mins), unsafe_allow_html=True)
     for i in range(n): mat[i, :] -= r_mins[i]
-    st.write("S-au scăzut valorile minime din fiecare linie.")
 
-    # --- ETAPA 2: REDUCEREA PE COLOANE ---
-    st.markdown("### PAS 2: Reducerea pe Coloane")
+    # --- PAS 2: REDUCEREA PE COLOANE ---
+    st.markdown("### PAS 2: Reducerea pe Coloane (Identificare $MIN C$)")
     c_mins = np.zeros(n)
     for j in range(n):
-        if not np.any(mat[:, j] == 0): # Dacă coloana nu are zerouri
+        if not np.any(mat[:, j] == 0):
             c_mins[j] = mat[:, j].min()
-            mat[:, j] -= c_mins[j]
-    
-    # Afișăm matricea rezultată (Aceasta este Iteratia I0)
-    st.markdown(draw_html_matrix(mat, [], [], [], [], set(), set(), col_mins=c_mins), unsafe_allow_html=True)
-    st.write("S-au identificat coloanele fără zerouri și s-au redus cu minimul lor.")
+    st.markdown(get_html_matrix(mat, [], [], [], [], set(), set(), col_mins=c_mins), unsafe_allow_html=True)
+    for j in range(n): mat[:, j] -= c_mins[j]
 
     # --- PROCESUL ITERATIV (I0, I1, ...) ---
     iter_idx = 0
     history_eps = []
+    final_bx = []
 
     while iter_idx < 10:
-        bx, cr = repartizare_zerouri(mat)
-        r_cov, c_cov, m_rows, m_cols = procedura_marcaj(mat, bx, cr)
+        bx, cr = procedura_repartizare(mat)
+        r_cov, c_cov, m_rows, m_cols = procedura_marcaj_lateral(mat, bx, cr)
         
         st.divider()
         st.markdown(f"#### Iterația $I_{iter_idx}$")
         
         if len(bx) == n:
-            # Soluție găsită
-            st.markdown(draw_html_matrix(mat, [], [], bx, cr, set(), set()), unsafe_allow_html=True)
-            st.success(f"Condiția de optimalitate îndeplinită: {len(bx)} zerouri încadrate.")
+            # Soluția a fost găsită
+            st.markdown(get_html_matrix(mat, [], [], bx, cr, set(), set()), unsafe_allow_html=True)
+            st.success(f"Condiția de optimalitate îndeplinită la $I_{iter_idx}$ ($m = n = {n}$).")
+            final_bx = bx
             break
         else:
-            # Mai avem pași de făcut
-            st.markdown(draw_html_matrix(mat, r_cov, c_cov, bx, cr, m_rows, m_cols), unsafe_allow_html=True)
-            
-            # Calcul Epsilon
+            # Continuăm procesul
+            st.markdown(get_html_matrix(mat, r_cov, c_cov, bx, cr, m_rows, m_cols), unsafe_allow_html=True)
             uncovered = [mat[r, c] for r in range(n) for c in range(n) if r not in r_cov and c not in c_cov]
             eps = min(uncovered)
             history_eps.append((eps, len(r_cov) + len(c_cov)))
             st.latex(r"\epsilon_{" + str(iter_idx) + r"} = " + str(int(eps)))
-            
-            # Ajustare
             for r in range(n):
                 for c in range(n):
                     if r not in r_cov and c not in c_cov: mat[r, c] -= eps
                     if r in r_cov and c in c_cov: mat[r, c] += eps
         iter_idx += 1
 
-    # --- REZULTAT FINAL ---
+    # --- PAS 3: SOLUȚIA ȘI W_MAX ---
     st.divider()
-    v_final = sum(mat_orig[r, c] for r, c in bx)
-    st.subheader(f"Cost Total Minim ($V_{{min}}$): {int(v_final)}")
+    st.markdown("### PAS 3: Soluția Finală (Cuplajul Maximal)")
     
-    st.info("**Verificare Analitică:**")
-    sum_red = np.sum(r_mins) + np.sum(c_mins)
-    sum_eps = sum(e * (n - m) for e, m in history_eps)
-    st.latex(r"V_{min} = \sum MIN(L) + \sum MIN(C) + \sum \epsilon_k(n - m_k)")
-    st.write(f"Calcul: {int(sum_red)} + {int(sum_eps)} = **{int(sum_red + sum_eps)}**")
+    # Construim setul W_max sub formă matematică (Pagina 6 seminar)
+    w_max_elements = [f"(x_{r+1}, y_{c+1})" for r, c in final_bx]
+    w_max_latex = r"W_{max} = \{ " + ", ".join(w_max_elements) + r" \}"
+    
+    st.latex(w_max_latex)
+    
+    v_total = sum(mat_orig[r, c] for r, c in final_bx)
+    st.markdown(f"#### Valoarea Optimă a Cuplajului: $V(W_{{max}}) = {int(v_total)}$")
+    
+    # Verificare Analitică
+    st.info("**Verificare Analitică (conform Formulei):**")
+    sum_mins = np.sum(r_mins) + np.sum(c_mins)
+    sum_sigmas = sum(e * (n - m) for e, m in history_eps)
+    st.latex(r"V_{min}(W_{max}) = \sum MIN(L) + \sum MIN(C) + \sum \epsilon_k(n - m_k)")
+    st.write(f"Calcul: {int(sum_mins)} + {int(sum_sigmas)} = **{int(sum_mins + sum_sigmas)}**")
