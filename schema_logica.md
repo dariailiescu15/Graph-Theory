@@ -1,4 +1,4 @@
-# Algoritmul Ford-Fulkerson - Flux Maxix
+# Algoritmul Ford-Fulkerson - Flux Maxim
 
 ## Schema Logică a Algoritmului
 
