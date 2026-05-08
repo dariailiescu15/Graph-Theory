@@ -48,7 +48,7 @@ flowchart TD
 
 ## Schema Logică a Algoritmului
 ```mermaid
-floowchart TD
+graph TD
     A(["START: Citește Matricea C de dimensiune n x n"]) --> B{"Obiectiv = Maximizare?"}
     
     B -- DA --> C["Conversie Cost: C* = MAX_VAL - C"]
