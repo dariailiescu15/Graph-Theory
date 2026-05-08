@@ -44,7 +44,7 @@ flowchart TD
     Cut --> Outp[/"Afișează: Matricea alocărilor f(i,j),<br>Fluxul maxim φ_max, Tăietura minimă C_T"/]:::io
     Outp --> End(["STOP"]):::startend
 ```
-# Algoritmul Ungar - Cuplaj Maxim cu valoare optima minima/maximă
+# Algoritmul Ungar - Cuplaj Maxim cu valoare optimă minima/maximă
 
 ## Schema Logică a Algoritmului
 ```mermaid
