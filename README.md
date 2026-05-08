@@ -1,6 +1,6 @@
 # Algoritmul Ford-Fulkerson - Flux Maxim
 
-Acest proiect implementează algoritmul Ford-Fulkerson folosind Python și Streamlit, incluzând o metodă hibridă de inițializare euristică ($I_0$) și procedura de etichetare.
+Acest proiect implementează algoritmul Ford-Fulkerson folosind Python și Streamlit, incluzând o metodă hibridă de inițializare ($I_0$) și procedura de etichetare și marcaj.
 
 ## Schema Logică a Algoritmului
 
