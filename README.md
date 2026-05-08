@@ -47,7 +47,7 @@ flowchart TD
 # Algoritmul Ungar - Cuplaj Maxim cu valoare optima minima/maximă
 
 ## Schema Logică a Algoritmului
-
+```mermaid
 flowchart TD
     %% Stilizare generală
     classDef startend fill:#d5e8d4,stroke:#82b366,stroke-width:2px,color:#000
@@ -91,3 +91,4 @@ flowchart TD
     %% IEȘIRE DATE / STOP
     CalcCost --> Outp[/"Afișează: Matricea alocărilor X,<br>Cost_Minim"/]:::io
     Outp --> End(["STOP"]):::startend
+```
