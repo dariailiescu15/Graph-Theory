@@ -48,47 +48,38 @@ flowchart TD
 
 ## Schema Logică a Algoritmului
 ```mermaid
-flowchart TD
-    %% Stilizare generală
-    classDef startend fill:#d5e8d4,stroke:#82b366,stroke-width:2px,color:#000
-    classDef io fill:#ffe6cc,stroke:#d79b00,stroke-width:2px,color:#000
-    classDef process fill:#dae8fc,stroke:#6c8ebf,stroke-width:2px,color:#000
-    classDef decision fill:#fff2cc,stroke:#d6b656,stroke-width:2px,color:#000
-
-    %% START / INTRARE DATE
-    Start(["START"]):::startend --> Inp[/"Citește matricea costurilor C(n x n)"/]:::io
-    Inp --> Init["Copiază C în C_modificat"]:::process
-
-    %% ================= FAZA 1 =================
-    subgraph Faza_1 ["Faza 1: Reducerea Matricii"]
-        direction TB
-        Init --> Lin["Scade minimul fiecărei LINII<br>din toate elementele liniei respective"]:::process
-        Lin --> Col["Scade minimul fiecărei COLOANE<br>din toate elementele coloanei respective"]:::process
-    end
-
-    %% ================= FAZA 2 =================
-    subgraph Faza_2["Faza 2: Testul de Optimalitate"]
-        direction TB
-        Col --> Lines["Trasează numărul minim de linii (L)<br>care acoperă TOATE zerourile din C_modificat"]:::process
-        Lines --> CheckL{"L = n?"}:::decision
-    end
-
-    %% ================= FAZA 3 =================
-    subgraph Faza_3 ["Faza 3: Ajustarea Elementelor"]
-        direction TB
-        CheckL -->|Nu| MinUnc["Găsește valoarea minimă neacoperită (min)"]:::process
-        MinUnc --> Adj["Scade 'min' din toate elementele neacoperite.<br>Adună 'min' la intersecțiile liniilor.<br>Elementele acoperite simplu rămân la fel."]:::process
-        Adj --> Lines
-    end
-
-    %% ================= FAZA 4 =================
-    subgraph Faza_4 ["Faza 4: Afectarea (Determinarea Soluției)"]
-        direction TB
-        CheckL -->|Da| Assign["Selectează n zerouri independente<br>(câte un singur 0 pe fiecare linie și coloană)"]:::process
-        Assign --> CalcCost["Setează X(i,j) = 1 pentru zerourile alese.<br>Calculează Cost_Minim folosind matricea inițială C."]:::process
-    end
-
-    %% IEȘIRE DATE / STOP
-    CalcCost --> Outp[/"Afișează: Matricea alocărilor X,<br>Cost_Minim"/]:::io
-    Outp --> End(["STOP"]):::startend
+graph TD
+    A(["START: Citește Matricea C de dimensiune n x n"]) --> B{"Obiectiv = Maximizare?"}
+    
+    B -- DA --> C["Conversie Cost: C* = MAX_VAL - C"]
+    B -- NU --> D["PAS 1: Reducere Linii <br> Scade minimul fiecărei linii din linia respectivă"]
+    
+    C --> D
+    D --> E["PAS 2: Reducere Coloane <br> Scade minimul fiecărei coloane din coloana respectivă"]
+    
+    E --> F["PAS 3: Alocarea Iterativă a Zerourilor <br> Încadrarea primelor zerouri și Bararea conflictelor"]
+    
+    F --> G{"Număr zerouri încadrate <br> m = n ?"}
+    
+    G -- "DA (Soluție Optimă)" --> H(["STOP: Cuplajul Maxim a fost găsit! <br> Generare Matrice Soluție"])
+    
+    G -- "NU (m < n)" --> I["PAS 4: Procedura de Marcaj <br> 1. Marchează Liniile fără 0 încadrat"]
+    I --> J["2. Marchează Coloanele cu 0 barat pe liniile marcate"]
+    J --> K["3. Marchează Liniile cu 0 încadrat pe coloanele marcate"]
+    
+    K --> L{"S-au făcut <br> marcaje noi?"}
+    L -- DA --> J
+    L -- NU --> M["Determinare Suport Minim S: <br> Tăieturi pe Linii NEMARCATE și Coloane MARCATE"]
+    
+    M --> N["PAS 5: Deplasarea Zerourilor <br> ε = min(Elemente Netăiate - T1)"]
+    
+    N --> O["T1 = T1 - ε <br> T3 (Intersecții) = T3 + ε <br> T2 rămâne neschimbat"]
+    
+    O --> F
+    
+    style A fill:#ffecd9,stroke:#e65c00,stroke-width:2px,color:#000
+    style H fill:#d4edda,stroke:#28a745,stroke-width:2px,color:#000
+    style G fill:#fff3cd,stroke:#ffc107,stroke-width:2px,color:#000
+    style F fill:#e3f2fd,stroke:#0d47a1,stroke-width:1px,color:#000
+    style O fill:#e3f2fd,stroke:#0d47a1,stroke-width:1px,color:#000
 ```
